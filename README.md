@@ -1,6 +1,8 @@
 etcetera
 ========
 
+[![Build Status](https://travis-ci.org/rafaeljusto/etcetera.png?branch=master)](https://travis-ci.org/rafaeljusto/etcetera)
+
 This is an etcd client that uses a tagged struct to save and load values. The idea was originally
 from Gustavo Henrique Montesião de Sousa (@gustavo-hms).
 

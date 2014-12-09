@@ -72,7 +72,7 @@ func TestSave(t *testing.T) {
 		expected    etcd.Node
 	}{
 		{
-			description: "it should save a one-level configuration ignoring not tagged fields",
+			description: "it should save an one-level configuration ignoring not tagged fields",
 			config: struct {
 				Field1 string `etcd:"/field1"`
 				Field2 int    `etcd:"/field2"`
@@ -329,7 +329,7 @@ func TestSave(t *testing.T) {
 			continue
 
 		} else if err != nil && !item.expectedErr {
-			t.Errorf("Item %d, “%s”: unexpected error", i, item.description)
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
 			continue
 		}
 
@@ -347,7 +347,381 @@ func TestLoad(t *testing.T) {
 		config      interface{}
 		expectedErr bool
 		expected    interface{}
-	}{}
+	}{
+		{
+			description: "it should load an one-level configuration ignoring not tagged fields",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field1",
+						Value: "value1",
+					},
+					{
+						Key:   "/field2",
+						Value: "10",
+					},
+					{
+						Key:   "/field3",
+						Value: "20",
+					},
+					{
+						Key:   "/field4",
+						Value: "true",
+					},
+				},
+			},
+			config: &struct {
+				Field1 string `etcd:"/field1"`
+				Field2 int    `etcd:"/field2"`
+				Field3 int64  `etcd:"/field3"`
+				Field4 bool   `etcd:"/field4"`
+				Extra  string
+			}{},
+			expected: struct {
+				Field1 string `etcd:"/field1"`
+				Field2 int    `etcd:"/field2"`
+				Field3 int64  `etcd:"/field3"`
+				Field4 bool   `etcd:"/field4"`
+				Extra  string
+			}{
+				Field1: "value1",
+				Field2: 10,
+				Field3: 20,
+				Field4: true,
+			},
+		},
+		{
+			description: "it should load an embedded structure",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/subfield1",
+								Value: "10",
+							},
+							{
+								Key:   "/field/subfield2",
+								Value: "20",
+							},
+							{
+								Key:   "/field/subfield3",
+								Value: "false",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field1 struct {
+					Subfield1 int   `etcd:"/subfield1"`
+					Subfield2 int64 `etcd:"/subfield2"`
+					Subfield3 bool  `etcd:"/subfield3"`
+				} `etcd:"/field"`
+			}{},
+			expected: struct {
+				Field1 struct {
+					Subfield1 int   `etcd:"/subfield1"`
+					Subfield2 int64 `etcd:"/subfield2"`
+					Subfield3 bool  `etcd:"/subfield3"`
+				} `etcd:"/field"`
+			}{
+				Field1: struct {
+					Subfield1 int   `etcd:"/subfield1"`
+					Subfield2 int64 `etcd:"/subfield2"`
+					Subfield3 bool  `etcd:"/subfield3"`
+				}{
+					Subfield1: 10,
+					Subfield2: 20,
+					Subfield3: false,
+				},
+			},
+		},
+		{
+			description: "it should load a slice of strings",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/0",
+								Value: "value1",
+							},
+							{
+								Key:   "/field/1",
+								Value: "value2",
+							},
+							{
+								Key:   "/field/2",
+								Value: "value3",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []string `etcd:"/field"`
+			}{},
+			expected: struct {
+				Field []string `etcd:"/field"`
+			}{
+				Field: []string{"value1", "value2", "value3"},
+			},
+		},
+		{
+			description: "it should load a slice of int",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/0",
+								Value: "10",
+							},
+							{
+								Key:   "/field/1",
+								Value: "20",
+							},
+							{
+								Key:   "/field/2",
+								Value: "30",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []int `etcd:"/field"`
+			}{},
+			expected: struct {
+				Field []int `etcd:"/field"`
+			}{
+				Field: []int{10, 20, 30},
+			},
+		},
+		{
+			description: "it should load a slice of int64",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/0",
+								Value: "10",
+							},
+							{
+								Key:   "/field/1",
+								Value: "20",
+							},
+							{
+								Key:   "/field/2",
+								Value: "30",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []int64 `etcd:"/field"`
+			}{},
+			expected: struct {
+				Field []int64 `etcd:"/field"`
+			}{
+				Field: []int64{10, 20, 30},
+			},
+		},
+		{
+			description: "it should load a slice of bool",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/0",
+								Value: "true",
+							},
+							{
+								Key:   "/field/1",
+								Value: "false",
+							},
+							{
+								Key:   "/field/2",
+								Value: "true",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []bool `etcd:"/field"`
+			}{},
+			expected: struct {
+				Field []bool `etcd:"/field"`
+			}{
+				Field: []bool{true, false, true},
+			},
+		},
+		{
+			description: "it should load a slice of structures",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key: "/field/0",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/0/subfield1",
+										Value: "10",
+									},
+									{
+										Key:   "/field/0/subfield2",
+										Value: "20",
+									},
+									{
+										Key:   "/field/0/subfield3",
+										Value: "false",
+									},
+								},
+							},
+							{
+								Key: "/field/1",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/1/subfield1",
+										Value: "20",
+									},
+									{
+										Key:   "/field/1/subfield2",
+										Value: "40",
+									},
+									{
+										Key:   "/field/1/subfield3",
+										Value: "true",
+									},
+								},
+							},
+							{
+								Key: "/field/2",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/2/subfield1",
+										Value: "40",
+									},
+									{
+										Key:   "/field/2/subfield2",
+										Value: "80",
+									},
+									{
+										Key:   "/field/2/subfield3",
+										Value: "false",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []struct {
+					Subfield1 int   `etcd:"/subfield1"`
+					Subfield2 int64 `etcd:"/subfield2"`
+					Subfield3 bool  `etcd:"/subfield3"`
+				} `etcd:"/field"`
+			}{},
+			expected: struct {
+				Field []struct {
+					Subfield1 int   `etcd:"/subfield1"`
+					Subfield2 int64 `etcd:"/subfield2"`
+					Subfield3 bool  `etcd:"/subfield3"`
+				} `etcd:"/field"`
+			}{
+				Field: []struct {
+					Subfield1 int   `etcd:"/subfield1"`
+					Subfield2 int64 `etcd:"/subfield2"`
+					Subfield3 bool  `etcd:"/subfield3"`
+				}{
+					{
+						Subfield1: 10,
+						Subfield2: 20,
+						Subfield3: false,
+					},
+					{
+						Subfield1: 20,
+						Subfield2: 40,
+						Subfield3: true,
+					},
+					{
+						Subfield1: 40,
+						Subfield2: 80,
+						Subfield3: false,
+					},
+				},
+			},
+		},
+		{
+			description: "it should save a map of string to string",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/subfield1",
+								Value: "value1",
+							},
+							{
+								Key:   "/field/subfield2",
+								Value: "value2",
+							},
+							{
+								Key:   "/field/subfield3",
+								Value: "value3",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field map[string]string `etcd:"/field"`
+			}{
+				Field: make(map[string]string),
+			},
+			expected: struct {
+				Field map[string]string `etcd:"/field"`
+			}{
+				Field: map[string]string{
+					"subfield1": "value1",
+					"subfield2": "value2",
+					"subfield3": "value3",
+				},
+			},
+		},
+	}
 
 	for i, item := range data {
 		if DEBUG {
@@ -357,13 +731,13 @@ func TestLoad(t *testing.T) {
 		c := NewClientMock()
 		c.root = &item.etcdData
 
-		err := Load(&item.config, c)
+		err := Load(item.config, c)
 		if err == nil && item.expectedErr {
 			t.Errorf("Item %d, “%s”: error expected", i, item.description)
 			continue
 
 		} else if err != nil && !item.expectedErr {
-			t.Errorf("Item %d, “%s”: unexpected error", i, item.description)
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
 			continue
 		}
 
@@ -480,13 +854,11 @@ func (c *clientMock) Set(path string, value string, ttl uint64) (*etcd.Response,
 	c.etcdIndex += 1
 	current := c.createDirsInPath(path, ttl)
 
-	parts := strings.Split(path, "/")
 	found := false
-
 	for _, n := range current.Nodes {
-		if n.Key == parts[len(parts)-1] {
+		if n.Key == path {
 			if n.Dir {
-				return nil, etcderrors.NewRequestError(etcderrors.EcodeNotFile, "")
+				return nil, etcderrors.NewRequestError(etcderrors.EcodeNotFile, path)
 
 			} else {
 				found = true
@@ -541,12 +913,16 @@ func (c *clientMock) Get(path string, sort, recursive bool) (*etcd.Response, err
 	}
 
 	current := c.root
+	currentPath := c.root.Key
 	parts := strings.Split(path, "/")
 
-	for _, part := range parts {
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		currentPath += "/" + part
+
 		found := false
 		for _, n := range current.Nodes {
-			if n.Key == part {
+			if n.Key == currentPath {
 				found = true
 				current = n
 				break
@@ -554,7 +930,7 @@ func (c *clientMock) Get(path string, sort, recursive bool) (*etcd.Response, err
 		}
 
 		if !found {
-			return nil, etcderrors.NewRequestError(etcderrors.EcodeKeyNotFound, "")
+			return nil, etcderrors.NewRequestError(etcderrors.EcodeKeyNotFound, path)
 		}
 	}
 

@@ -133,11 +133,10 @@ func Load(config interface{}, c client) error {
 
 func load(config interface{}, c client, pathSuffix string) error {
 	st := reflect.ValueOf(config)
-	if st.Kind() == reflect.Ptr {
-		st = st.Elem()
-	} else if st.Kind() != reflect.Struct {
+	if st.Kind() != reflect.Ptr {
 		return ErrInvalidConfig
 	}
+	st = st.Elem()
 
 	for i := 0; i < st.NumField(); i++ {
 		fieldType := st.Type().Field(i)
@@ -150,7 +149,7 @@ func load(config interface{}, c client, pathSuffix string) error {
 
 		switch fieldValue.Kind() {
 		case reflect.Struct:
-			if err := load(fieldValue.Interface(), c, path); err != nil {
+			if err := load(fieldValue.Addr().Interface(), c, path); err != nil {
 				return err
 			}
 
@@ -198,7 +197,22 @@ func load(config interface{}, c client, pathSuffix string) error {
 					fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(node.Value)))
 				}
 
-			case reflect.Int, reflect.Int64:
+			case reflect.Int:
+				response, err := c.Get(path, true, true)
+				if err != nil {
+					return err
+				}
+
+				for _, node := range response.Node.Nodes {
+					value, err := strconv.ParseInt(node.Value, 10, 64)
+					if err != nil {
+						return err
+					}
+
+					fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(int(value))))
+				}
+
+			case reflect.Int64:
 				response, err := c.Get(path, true, true)
 				if err != nil {
 					return err

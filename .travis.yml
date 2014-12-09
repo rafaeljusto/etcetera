@@ -1,0 +1,30 @@
+language: go
+
+go:
+  - 1.3
+
+env:
+  # "gvm update" resets GOOS and GOARCH environment variable, workaround it by setting
+  # BUILD_GOOS and BUILD_GOARCH and overriding GOARCH and GOOS in the build script
+  global:
+    - BUILD_GOARCH=amd64
+  matrix:
+    - BUILD_GOOS=linux
+    - BUILD_GOOS=darwin
+    - BUILD_GOOS=windows
+
+install:
+  - go get github.com/coreos/etcd/error"
+  - go get github.com/coreos/go-etcd/etcd
+
+script:
+  - gvm cross $BUILD_GOOS $BUILD_GOARCH
+  - GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go build
+  - GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go test
+
+notifications:
+  email:
+    recipients:
+      - rafael@justo.net.br
+    on_success: change
+    on_failure: always

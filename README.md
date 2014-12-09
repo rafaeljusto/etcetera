@@ -2,6 +2,7 @@ etcetera
 ========
 
 [![Build Status](https://travis-ci.org/rafaeljusto/etcetera.png?branch=master)](https://travis-ci.org/rafaeljusto/etcetera)
+[![Coverage Status](https://img.shields.io/coveralls/rafaeljusto/etcetera.svg?branch=master)](https://coveralls.io/r/rafaeljusto/etcetera?branch=master)
 [![GoDoc](https://godoc.org/github.com/rafaeljusto/etcetera?status.png)](https://godoc.org/github.com/rafaeljusto/etcetera)
 
 This is an etcd client that uses a tagged struct to save and load values. The idea was originally

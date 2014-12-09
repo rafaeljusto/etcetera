@@ -314,6 +314,11 @@ func TestSave(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "it should fail to save a non-structure",
+			config:      123,
+			expectedErr: true,
+		},
 	}
 
 	for i, item := range data {
@@ -333,7 +338,7 @@ func TestSave(t *testing.T) {
 			continue
 		}
 
-		if !equalNodes(c.root, &item.expected) {
+		if !item.expectedErr && !equalNodes(c.root, &item.expected) {
 			t.Errorf("Item %d, “%s”: nodes mismatch. Expecting “%s”; found “%s”",
 				i, item.description, printNode(&item.expected), printNode(c.root))
 		}
@@ -741,7 +746,7 @@ func TestLoad(t *testing.T) {
 			continue
 		}
 
-		if reflect.DeepEqual(item.config, item.expected) {
+		if !item.expectedErr && reflect.DeepEqual(item.config, item.expected) {
 			t.Errorf("Item %d, “%s”: config mismatch. Expecting “%+v”; found “%+v”",
 				i, item.description, item.expected, item.config)
 		}
@@ -771,7 +776,7 @@ func (c *clientMock) CreateDir(path string, ttl uint64) (*etcd.Response, error) 
 		fmt.Printf(" - Creating path %s\n", path)
 	}
 
-	c.etcdIndex += 1
+	c.etcdIndex++
 	current := c.createDirsInPath(path, ttl)
 
 	parts := strings.Split(path, "/")
@@ -814,7 +819,7 @@ func (c *clientMock) CreateInOrder(path string, value string, ttl uint64) (*etcd
 		fmt.Printf(" - Creating in order path %s with value “%s”\n", path, value)
 	}
 
-	c.etcdIndex += 1
+	c.etcdIndex++
 	current := c.createDirsInPath(path, ttl)
 
 	for _, n := range current.Nodes {
@@ -851,7 +856,7 @@ func (c *clientMock) Set(path string, value string, ttl uint64) (*etcd.Response,
 		fmt.Printf(" - Setting path %s with value “%s”\n", path, value)
 	}
 
-	c.etcdIndex += 1
+	c.etcdIndex++
 	current := c.createDirsInPath(path, ttl)
 
 	found := false
@@ -859,12 +864,11 @@ func (c *clientMock) Set(path string, value string, ttl uint64) (*etcd.Response,
 		if n.Key == path {
 			if n.Dir {
 				return nil, etcderrors.NewRequestError(etcderrors.EcodeNotFile, path)
-
-			} else {
-				found = true
-				current = n
-				break
 			}
+
+			found = true
+			current = n
+			break
 		}
 	}
 

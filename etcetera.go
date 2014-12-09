@@ -15,8 +15,13 @@ import (
 )
 
 var (
-	ErrInvalidConfig  = errors.New("Configuration must be a structure or a pointer to a structure")
-	ErrNotInitialized = errors.New("Configuration has fields that are not initialized (map)")
+	// ErrInvalidConfig alert whenever you try to use something that is not a structure in the Save
+	// function, or something that is not a pointer to a structure in the Load funciton
+	ErrInvalidConfig = errors.New("etcetera: configuration must be a structure or a pointer to a structure")
+
+	// ErrNotInitialized alert when you pass a structure to the Load function that has a map attribute
+	// that is not initialized
+	ErrNotInitialized = errors.New("etcetera: configuration has fields that are not initialized (map)")
 )
 
 // Save stores a structure in etcd. Only attributes with the tag 'etcd' are going to be saved.

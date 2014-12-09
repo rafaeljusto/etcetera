@@ -1,8 +1,8 @@
 etcetera
 ========
 
-This is an etcd client that uses a tagged struct to save and load values. The idea is to make it
-easy to save and load our configuration structure in etcd.
+This is an etcd client that uses a tagged struct to save and load values. The idea was originally
+from Gustavo Henrique Montesião de Sousa (@gustavo-hms).
 
 To use it, simple add a 'etcd' tag to your structure mapping the attribute to an etcd URI. For now
 you can add a tag in the following types:

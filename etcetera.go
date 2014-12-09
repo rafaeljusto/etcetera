@@ -5,6 +5,7 @@
 package etcetera
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -13,14 +14,24 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+var (
+	ErrInvalidConfig  = errors.New("Configuration must be a structure or a pointer to a structure")
+	ErrNotInitialized = errors.New("Configuration has fields that are not initialized (map)")
+)
+
 // Save stores a structure in etcd. Only attributes with the tag 'etcd' are going to be saved.
 // Supported types are 'struct', 'slice', 'map', 'string', 'int', 'int64' and 'bool'
-func Save(config interface{}, client *etcd.Client) error {
-	return save(config, client, "")
+func Save(config interface{}, c client) error {
+	return save(config, c, "")
 }
 
-func save(config interface{}, client *etcd.Client, pathSuffix string) error {
-	st := reflect.ValueOf(config).Elem()
+func save(config interface{}, c client, pathSuffix string) error {
+	st := reflect.ValueOf(config)
+	if st.Kind() == reflect.Ptr {
+		st = st.Elem()
+	} else if st.Kind() != reflect.Struct {
+		return ErrInvalidConfig
+	}
 
 	for i := 0; i < st.NumField(); i++ {
 		fieldType := st.Type().Field(i)
@@ -33,25 +44,25 @@ func save(config interface{}, client *etcd.Client, pathSuffix string) error {
 
 		switch fieldValue.Kind() {
 		case reflect.Struct:
-			if err := save(fieldValue.Addr().Interface(), client, path); err != nil {
+			if err := save(fieldValue.Interface(), c, path); err != nil {
 				return err
 			}
 
 		case reflect.Map:
-			if _, err := client.CreateDir(path, 0); err != nil && !alreadyExistsError(err) {
+			if _, err := c.CreateDir(path, 0); err != nil && !alreadyExistsError(err) {
 				return err
 			}
 
 			for _, key := range fieldValue.MapKeys() {
 				value := fieldValue.MapIndex(key)
 
-				if _, err := client.Set(path+"/"+key.String(), value.String(), 0); err != nil {
+				if _, err := c.Set(path+"/"+key.String(), value.String(), 0); err != nil {
 					return err
 				}
 			}
 
 		case reflect.Slice:
-			if _, err := client.CreateDir(path, 0); err != nil && !alreadyExistsError(err) {
+			if _, err := c.CreateDir(path, 0); err != nil && !alreadyExistsError(err) {
 				return err
 			}
 
@@ -61,16 +72,16 @@ func save(config interface{}, client *etcd.Client, pathSuffix string) error {
 				if value.Kind() == reflect.Struct {
 					tmpPath := fmt.Sprintf("%s/%d", path, i)
 
-					if _, err := client.CreateDir(tmpPath, 0); err != nil && !alreadyExistsError(err) {
+					if _, err := c.CreateDir(tmpPath, 0); err != nil && !alreadyExistsError(err) {
 						return err
 					}
 
-					if err := save(value.Addr().Interface(), client, tmpPath); err != nil {
+					if err := save(value.Interface(), c, tmpPath); err != nil {
 						return err
 					}
 
 				} else {
-					if _, err := client.CreateInOrder(path, value.String(), 0); err != nil {
+					if _, err := c.CreateInOrder(path, value.String(), 0); err != nil {
 						return err
 					}
 				}
@@ -78,19 +89,19 @@ func save(config interface{}, client *etcd.Client, pathSuffix string) error {
 
 		case reflect.String:
 			value := fieldValue.Interface().(string)
-			if _, err := client.Set(path, value, 0); err != nil {
+			if _, err := c.Set(path, value, 0); err != nil {
 				return err
 			}
 
 		case reflect.Int:
 			value := fieldValue.Interface().(int)
-			if _, err := client.Set(path, strconv.FormatInt(int64(value), 10), 0); err != nil {
+			if _, err := c.Set(path, strconv.FormatInt(int64(value), 10), 0); err != nil {
 				return err
 			}
 
 		case reflect.Int64:
 			value := fieldValue.Interface().(int64)
-			if _, err := client.Set(path, strconv.FormatInt(value, 10), 0); err != nil {
+			if _, err := c.Set(path, strconv.FormatInt(value, 10), 0); err != nil {
 				return err
 			}
 
@@ -104,7 +115,7 @@ func save(config interface{}, client *etcd.Client, pathSuffix string) error {
 				valueStr = "false"
 			}
 
-			if _, err := client.Set(path, valueStr, 0); err != nil {
+			if _, err := c.Set(path, valueStr, 0); err != nil {
 				return err
 			}
 		}
@@ -116,12 +127,17 @@ func save(config interface{}, client *etcd.Client, pathSuffix string) error {
 // Load retrieves the data from the etcd into the given structure. Only attributes with the tag
 // 'etcd' will be filled. Supported types are 'struct', 'slice', 'map', 'string', 'int', 'int64' and
 // 'bool'
-func Load(config interface{}, client *etcd.Client) error {
-	return load(config, client, "")
+func Load(config interface{}, c client) error {
+	return load(config, c, "")
 }
 
-func load(config interface{}, client *etcd.Client, pathSuffix string) error {
-	st := reflect.ValueOf(config).Elem()
+func load(config interface{}, c client, pathSuffix string) error {
+	st := reflect.ValueOf(config)
+	if st.Kind() == reflect.Ptr {
+		st = st.Elem()
+	} else if st.Kind() != reflect.Struct {
+		return ErrInvalidConfig
+	}
 
 	for i := 0; i < st.NumField(); i++ {
 		fieldType := st.Type().Field(i)
@@ -134,16 +150,16 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 
 		switch fieldValue.Kind() {
 		case reflect.Struct:
-			if err := load(fieldValue.Addr().Interface(), client, path); err != nil {
+			if err := load(fieldValue.Interface(), c, path); err != nil {
 				return err
 			}
 
 		case reflect.Map:
 			if fieldValue.IsNil() {
-				return fmt.Errorf("Map must be initialized")
+				return ErrNotInitialized
 			}
 
-			response, err := client.Get(path, true, true)
+			response, err := c.Get(path, true, true)
 			if err != nil {
 				return err
 			}
@@ -158,14 +174,14 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 		case reflect.Slice:
 			switch fieldValue.Type().Elem().Kind() {
 			case reflect.Struct:
-				response, err := client.Get(path, true, true)
+				response, err := c.Get(path, true, true)
 				if err != nil {
 					return err
 				}
 
 				for _, node := range response.Node.Nodes {
 					newElement := reflect.New(fieldValue.Type().Elem())
-					if err := load(newElement.Interface(), client, node.Key); err != nil {
+					if err := load(newElement.Interface(), c, node.Key); err != nil {
 						return err
 					}
 
@@ -173,7 +189,7 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 				}
 
 			case reflect.String:
-				response, err := client.Get(path, true, true)
+				response, err := c.Get(path, true, true)
 				if err != nil {
 					return err
 				}
@@ -183,7 +199,7 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 				}
 
 			case reflect.Int, reflect.Int64:
-				response, err := client.Get(path, true, true)
+				response, err := c.Get(path, true, true)
 				if err != nil {
 					return err
 				}
@@ -198,7 +214,7 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 				}
 
 			case reflect.Bool:
-				response, err := client.Get(path, true, true)
+				response, err := c.Get(path, true, true)
 				if err != nil {
 					return err
 				}
@@ -213,7 +229,7 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 			}
 
 		case reflect.String:
-			response, err := client.Get(path, false, false)
+			response, err := c.Get(path, false, false)
 			if err != nil {
 				return err
 			}
@@ -221,7 +237,7 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 			fieldValue.SetString(response.Node.Value)
 
 		case reflect.Int, reflect.Int64:
-			response, err := client.Get(path, false, false)
+			response, err := c.Get(path, false, false)
 			if err != nil {
 				return err
 			}
@@ -234,7 +250,7 @@ func load(config interface{}, client *etcd.Client, pathSuffix string) error {
 			fieldValue.SetInt(value)
 
 		case reflect.Bool:
-			response, err := client.Get(path, false, false)
+			response, err := c.Get(path, false, false)
 			if err != nil {
 				return err
 			}

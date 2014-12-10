@@ -20,7 +20,9 @@ install:
 script:
   - gvm cross $BUILD_GOOS $BUILD_GOARCH
   - GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go build
-  - GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go test
+
+  # only test on linux
+  - if [ $BUILD_GOOS == "linux" ]; then GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go test; fi
 
 notifications:
   email:

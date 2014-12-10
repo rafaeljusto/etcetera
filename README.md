@@ -5,8 +5,10 @@ etcetera
 [![Coverage Status](https://img.shields.io/coveralls/rafaeljusto/etcetera.svg)](https://coveralls.io/r/rafaeljusto/etcetera)
 [![GoDoc](https://godoc.org/github.com/rafaeljusto/etcetera?status.png)](https://godoc.org/github.com/rafaeljusto/etcetera)
 
-This is an etcd client that uses a tagged struct to save and load values. The idea was originally
-from Gustavo Henrique Montesião de Sousa (@gustavo-hms).
+This is an [https://coreos.com/using-coreos/etcd/](etcd) client that uses a tagged struct to save
+and load values. The library is only an extra layer of abstraction over the
+[http://github.com/coreos/go-etcd](go-etcd) library. The idea was originally from Gustavo Henrique
+Montesião de Sousa ([https://github.com/gustavo-hms](@gustavo-hms)).
 
 How to use it
 -------------

@@ -604,11 +604,12 @@ func TestSave(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	data := []struct {
-		description string      // describe the test case
-		etcdData    etcd.Node   // etcd state before loading the configuration
-		config      interface{} // configuration structure (used to detect what we need to look for in etcd)
-		expectedErr bool        // error expectation when loading the configuration
-		expected    interface{} // configuration instance expected after loading
+		description string            // describe the test case
+		init        func(*clientMock) // initial configuration of the mocked client (if necessary)
+		etcdData    etcd.Node         // etcd state before loading the configuration
+		config      interface{}       // configuration structure (used to detect what we need to look for in etcd)
+		expectedErr bool              // error expectation when loading the configuration
+		expected    interface{}       // configuration instance expected after loading
 	}{
 		{
 			description: "it should load an one-level configuration ignoring not tagged fields",
@@ -988,6 +989,222 @@ func TestLoad(t *testing.T) {
 			config:      123,
 			expectedErr: true,
 		},
+		{
+			description: "it should fail when etcd rejects a get string",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field string `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects a get int",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field int `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects a get int64",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field int64 `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd returns a number with an invalid format",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field",
+						Value: "NaN",
+					},
+				},
+			},
+			config: &struct {
+				Field int `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects a get bool",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field bool `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get a structure field",
+			init: func(c *clientMock) {
+				c.getErrors["/field/subfield"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field struct {
+					Subfield int `etcd:"/subfield"`
+				} `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get a slice of structure",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field []struct {
+					Subfield int `etcd:"/subfield"`
+				} `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get an field from the structure of a slice",
+			init: func(c *clientMock) {
+				c.getErrors["/field/0/subfield"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key: "/field/0",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/0/subfield",
+										Value: "10",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []struct {
+					Subfield int `etcd:"/subfield"`
+				} `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get the slice of strings",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field []string `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get the slice of int",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field []int `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd returns an invalid int in a slice",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/0",
+								Value: "NaN",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []int `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get the slice of int64",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field []int64 `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd returns an invalid int64 in a slice",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/0",
+								Value: "NaN",
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field []int64 `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get the slice of bool",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field []bool `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when trying to load into a nil map",
+			config: &struct {
+				Field map[string]string `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd rejects to get a map",
+			init: func(c *clientMock) {
+				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+			},
+			config: &struct {
+				Field map[string]string `etcd:"/field"`
+			}{
+				Field: make(map[string]string),
+			},
+			expectedErr: true,
+		},
 	}
 
 	for i, item := range data {
@@ -997,6 +1214,10 @@ func TestLoad(t *testing.T) {
 
 		c := NewClientMock()
 		c.root = &item.etcdData
+
+		if item.init != nil {
+			item.init(c)
+		}
 
 		err := Load(item.config, c)
 		if err == nil && item.expectedErr {

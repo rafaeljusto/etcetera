@@ -7,6 +7,7 @@ env:
   # "gvm update" resets GOOS and GOARCH environment variable, workaround it by setting
   # BUILD_GOOS and BUILD_GOARCH and overriding GOARCH and GOOS in the build script
   global:
+    - secure: "IwG4wIo0WCqLqf2/OzN0PFNob3Q8ojYyBNfcoRelfS3HU9TFBV0rDmb6XCpEWlPMcxhDuMtueOZO1aEYgFIdsyZbh8uIb8icMbHi6/HhQpPtFzDf+peKL3s0fFpp7PmCDZBn+IEUklId64v+XArG1OKcP3Mi9FiNq1+gv3wuoss="
     - BUILD_GOARCH=amd64
   matrix:
     - BUILD_GOOS=linux
@@ -16,13 +17,15 @@ env:
 install:
   - go get github.com/coreos/etcd/error
   - go get github.com/coreos/go-etcd/etcd
+  - go get code.google.com/p/go.tools/cmd/cover
+  - go get github.com/mattn/goveralls
 
 script:
   - gvm cross $BUILD_GOOS $BUILD_GOARCH
   - GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go build
 
   # only test on linux
-  - if [ $BUILD_GOOS == "linux" ]; then GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go test; fi
+  - if [ $BUILD_GOOS == "linux" ]; then GOARCH=$BUILD_GOARCH GOOS=$BUILD_GOOS go test -v -covermode=count -coverprofile=coverage.out; $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
 
 notifications:
   email:

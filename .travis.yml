@@ -15,7 +15,6 @@ env:
     - BUILD_GOOS=windows
 
 install:
-  - go get github.com/coreos/etcd/error
   - go get github.com/coreos/go-etcd/etcd
   - go get code.google.com/p/go.tools/cmd/cover
   - go get github.com/mattn/goveralls

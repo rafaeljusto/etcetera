@@ -18,7 +18,6 @@ go get -u github.com/rafaeljusto/etcetera
 ```
 
 This project has the following dependencies:
-  * github.com/coreos/etcd
   * github.com/coreos/go-etcd/etcd
 
 To use it in your code, simple add a 'etcd' tag to your structure mapping the attribute to an etcd

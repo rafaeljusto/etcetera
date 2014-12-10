@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	etcderrors "github.com/coreos/etcd/error"
 	"github.com/coreos/go-etcd/etcd"
 )
 
@@ -323,7 +322,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a set string",
 			init: func(c *clientMock) {
-				c.setErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field string `etcd:"/field"`
@@ -335,7 +334,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a set int",
 			init: func(c *clientMock) {
-				c.setErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field int `etcd:"/field"`
@@ -347,7 +346,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a set int64",
 			init: func(c *clientMock) {
-				c.setErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field int64 `etcd:"/field"`
@@ -359,7 +358,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a set bool",
 			init: func(c *clientMock) {
-				c.setErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field bool `etcd:"/field"`
@@ -371,7 +370,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a set struct",
 			init: func(c *clientMock) {
-				c.setErrors["/field/subfield"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.setErrors["/field/subfield"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field struct {
@@ -387,9 +386,9 @@ func TestSave(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			description: "it should fail when etcd rejects to create the slice path",
+			description: "it should fail when etcd rejects to create the slice path with an unknown error",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.createDirErrors["/field"] = fmt.Errorf("Generic error!")
 			},
 			config: struct {
 				Field []string `etcd:"/field"`
@@ -401,7 +400,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should save when etcd rejects to create the slice path because it already exists",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: etcderrors.EcodeNodeExist}
+				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeNodeExist)}
 			},
 			config: struct {
 				Field []string `etcd:"/field"`
@@ -425,9 +424,41 @@ func TestSave(t *testing.T) {
 			},
 		},
 		{
+			description: "it should fail when etcd rejects to create the slice path",
+			init: func(c *clientMock) {
+				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
+			},
+			config: struct {
+				Field []string `etcd:"/field"`
+			}{
+				Field: []string{"value"},
+			},
+			expectedErr: true,
+		},
+		{
 			description: "it should fail when etcd rejects to create the index path for the structure",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field/0"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.createDirErrors["/field/0"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
+			},
+			config: struct {
+				Field []struct {
+					Subfield int `etcd:"/subfield"`
+				} `etcd:"/field"`
+			}{
+				Field: []struct {
+					Subfield int `etcd:"/subfield"`
+				}{
+					{
+						Subfield: 10,
+					},
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			description: "it should fails when etcd rejects to create the index path with an unknown error",
+			init: func(c *clientMock) {
+				c.createDirErrors["/field/0"] = fmt.Errorf("Generic error!")
 			},
 			config: struct {
 				Field []struct {
@@ -447,7 +478,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should save when etcd rejects to create the index path for the structure because it already exists",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field/0"] = &etcd.EtcdError{ErrorCode: etcderrors.EcodeNodeExist}
+				c.createDirErrors["/field/0"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeNodeExist)}
 			},
 			config: struct {
 				Field []struct {
@@ -487,7 +518,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a slice of struct values",
 			init: func(c *clientMock) {
-				c.setErrors["/field/0/subfield"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.setErrors["/field/0/subfield"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field []struct {
@@ -507,7 +538,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a slice of string values",
 			init: func(c *clientMock) {
-				c.createInOrderErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.createInOrderErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field []string `etcd:"/field"`
@@ -519,7 +550,21 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects creating the path that stores the map values",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
+			},
+			config: struct {
+				Field map[string]string `etcd:"/field"`
+			}{
+				Field: map[string]string{
+					"subfield": "value",
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			description: "it should fails when etcd rejects to create the map path with an unknown error",
+			init: func(c *clientMock) {
+				c.createDirErrors["/field"] = fmt.Errorf("Generic error!")
 			},
 			config: struct {
 				Field map[string]string `etcd:"/field"`
@@ -533,7 +578,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should save when etcd rejects to create the map path that stores the map values because it already exists it",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: etcderrors.EcodeNodeExist}
+				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeNodeExist)}
 			},
 			config: struct {
 				Field map[string]string `etcd:"/field"`
@@ -561,7 +606,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a set map",
 			init: func(c *clientMock) {
-				c.setErrors["/field/subfield"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.setErrors["/field/subfield"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
 				Field map[string]string `etcd:"/field"`
@@ -992,7 +1037,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a get string",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field string `etcd:"/field"`
@@ -1002,7 +1047,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a get int",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field int `etcd:"/field"`
@@ -1012,7 +1057,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a get int64",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field int64 `etcd:"/field"`
@@ -1038,7 +1083,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects a get bool",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field bool `etcd:"/field"`
@@ -1048,7 +1093,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get a structure field",
 			init: func(c *clientMock) {
-				c.getErrors["/field/subfield"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field/subfield"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field struct {
@@ -1060,7 +1105,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get a slice of structure",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field []struct {
@@ -1072,7 +1117,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get an field from the structure of a slice",
 			init: func(c *clientMock) {
-				c.getErrors["/field/0/subfield"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field/0/subfield"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			etcdData: etcd.Node{
 				Dir: true,
@@ -1105,7 +1150,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get the slice of strings",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field []string `etcd:"/field"`
@@ -1115,7 +1160,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get the slice of int",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field []int `etcd:"/field"`
@@ -1147,7 +1192,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get the slice of int64",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field []int64 `etcd:"/field"`
@@ -1179,7 +1224,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get the slice of bool",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field []bool `etcd:"/field"`
@@ -1196,7 +1241,7 @@ func TestLoad(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to get a map",
 			init: func(c *clientMock) {
-				c.getErrors["/field"] = etcderrors.NewRequestError(etcderrors.EcodeRaftInternal, "")
+				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field map[string]string `etcd:"/field"`
@@ -1270,7 +1315,7 @@ func (c *clientMock) CreateDir(path string, ttl uint64) (*etcd.Response, error) 
 
 	// CreatDir error is a special case, because we could have the "already created" error
 	err := c.createDirErrors[path]
-	if etcderr, ok := err.(*etcd.EtcdError); ok && etcderr.ErrorCode != etcderrors.EcodeNodeExist {
+	if etcderr, ok := err.(*etcd.EtcdError); ok && etcderr.ErrorCode != int(etcdErrorCodeNodeExist) {
 		return nil, err
 	}
 
@@ -1369,7 +1414,7 @@ func (c *clientMock) Set(path string, value string, ttl uint64) (*etcd.Response,
 	for _, n := range current.Nodes {
 		if n.Key == path {
 			if n.Dir {
-				return nil, etcderrors.NewRequestError(etcderrors.EcodeNotFile, path)
+				return nil, &etcd.EtcdError{ErrorCode: int(etcdErrorCodeNotFile), Message: path}
 			}
 
 			found = true
@@ -1444,7 +1489,7 @@ func (c *clientMock) Get(path string, sort, recursive bool) (*etcd.Response, err
 		}
 
 		if !found {
-			return nil, etcderrors.NewRequestError(etcderrors.EcodeKeyNotFound, path)
+			return nil, &etcd.EtcdError{ErrorCode: int(etcdErrorCodeKeyNotFound), Message: path}
 		}
 	}
 

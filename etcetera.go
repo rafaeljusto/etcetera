@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"strconv"
 
-	etcderrors "github.com/coreos/etcd/error"
 	"github.com/coreos/go-etcd/etcd"
 )
 
@@ -23,6 +22,16 @@ var (
 	// that is not initialized
 	ErrNotInitialized = errors.New("etcetera: configuration has fields that are not initialized (map)")
 )
+
+// https://github.com/coreos/etcd/blob/master/error/error.go
+const (
+	etcdErrorCodeKeyNotFound  etcdErrorCode = 100 // used in tests
+	etcdErrorCodeNotFile      etcdErrorCode = 102 // used in tests
+	etcdErrorCodeNodeExist    etcdErrorCode = 105
+	etcdErrorCodeRaftInternal etcdErrorCode = 300 // used in tests
+)
+
+type etcdErrorCode int
 
 // Save stores a structure in etcd. Only attributes with the tag 'etcd' are going to be saved.
 // Supported types are 'struct', 'slice', 'map', 'string', 'int', 'int64' and 'bool'
@@ -291,5 +300,5 @@ func alreadyExistsError(err error) bool {
 		return false
 	}
 
-	return etcderr.ErrorCode == etcderrors.EcodeNodeExist
+	return etcderr.ErrorCode == int(etcdErrorCodeNodeExist)
 }

@@ -647,6 +647,19 @@ func TestSave(t *testing.T) {
 	}
 }
 
+func BenchmarkSave(b *testing.B) {
+	c := NewClientMock()
+	for i := 0; i < b.N; i++ {
+		err := Save(struct {
+			Field string `etcd:"field"`
+		}{"value"}, c)
+
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestLoad(t *testing.T) {
 	data := []struct {
 		description string            // describe the test case
@@ -1281,6 +1294,29 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func BenchmarkLoad(b *testing.B) {
+	c := NewClientMock()
+	c.root = &etcd.Node{
+		Dir: true,
+		Nodes: etcd.Nodes{
+			{
+				Key:   "/field",
+				Value: "value",
+			},
+		},
+	}
+
+	config := struct {
+		Field string `etcd:"field"`
+	}{}
+
+	for i := 0; i < b.N; i++ {
+		if err := Load(&config, c); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 //////////////////////////////////////
 //////////////////////////////////////
 //////////////////////////////////////
@@ -1431,7 +1467,9 @@ func (c *clientMock) Set(path string, value string, ttl uint64) (*etcd.Response,
 			fmt.Printf("  > Key %s updated\n", path)
 		}
 
+		oldNode = new(etcd.Node)
 		*oldNode = *current
+
 		current.Value = value
 		current.TTL = int64(ttl)
 		current.ModifiedIndex = c.etcdIndex

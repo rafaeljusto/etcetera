@@ -9,8 +9,9 @@ import (
 )
 
 type client interface {
-	CreateDir(string, uint64) (*etcd.Response, error)
-	CreateInOrder(string, string, uint64) (*etcd.Response, error)
-	Set(string, string, uint64) (*etcd.Response, error)
-	Get(string, bool, bool) (*etcd.Response, error)
+	CreateDir(path string, ttl uint64) (*etcd.Response, error)
+	CreateInOrder(path, value string, ttl uint64) (*etcd.Response, error)
+	Set(path, value string, ttl uint64) (*etcd.Response, error)
+	Get(path string, sort, recursive bool) (*etcd.Response, error)
+	Watch(path string, waitIndex uint64, recursive bool, receiver chan *etcd.Response, stop chan bool) (*etcd.Response, error)
 }

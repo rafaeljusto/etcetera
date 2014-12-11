@@ -16,7 +16,7 @@ import (
 
 const DEBUG = false
 
-func ExampleSaveLoad() {
+func ExampleSave() {
 	type B struct {
 		SubField1 string `etcd:"/subfield1"`
 	}
@@ -31,7 +31,7 @@ func ExampleSaveLoad() {
 		Field7 []string          `etcd:"/field7"`
 	}
 
-	a1 := A{
+	a := A{
 		Field1: "value1",
 		Field2: 10,
 		Field3: 999,
@@ -41,26 +41,107 @@ func ExampleSaveLoad() {
 		Field7: []string{"value4", "value5", "value6"},
 	}
 
-	client := etcd.NewClient([]string{
-		"http://127.0.0.1:4001",
-	})
-
-	if err := Save(&a1, client); err != nil {
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 
-	a2 := A{
+	if err := client.Save(); err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	fmt.Printf("%+v\n", a)
+}
+
+func ExampleLoad() {
+	type B struct {
+		SubField1 string `etcd:"/subfield1"`
+	}
+
+	type A struct {
+		Field1 string            `etcd:"/field1"`
+		Field2 int               `etcd:"/field2"`
+		Field3 int64             `etcd:"/field3"`
+		Field4 bool              `etcd:"/field4"`
+		Field5 B                 `etcd:"/field5"`
+		Field6 map[string]string `etcd:"/field6"`
+		Field7 []string          `etcd:"/field7"`
+	}
+
+	a := A{
 		Field6: make(map[string]string),
 	}
 
-	if err := Load(&a2, client); err != nil {
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Printf("Input: %+v\n", a1)
-	fmt.Printf("Output: %+v\n", a2)
+	if err := client.Load(); err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	fmt.Printf("%+v\n", a)
+}
+
+func TestNewClient(t *testing.T) {
+	data := []struct {
+		description string      // describe the test case
+		machines    []string    // etcd servers
+		config      interface{} // configuration instance (structure) to save
+		expectedErr bool        // error expectation when building the object
+		expected    Client      // expected client object after calling the constructor
+	}{
+		{
+			description: "it should create a valid Client object",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			config: &struct{}{},
+			expected: Client{
+				etcdClient: etcd.NewClient([]string{
+					"http://127.0.0.1:4001",
+					"http://127.0.0.1:4002",
+					"http://127.0.0.1:4003",
+				}),
+				config: reflect.ValueOf(&struct{}{}),
+				info:   make(map[string]info),
+			},
+		},
+		{
+			description: "it should deny a non-pointer to structure",
+			config:      struct{}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should deny a pointer to something that is not a structure",
+			config:      &[]int{},
+			expectedErr: true,
+		},
+	}
+
+	for i, item := range data {
+		c, err := NewClient(item.machines, item.config)
+		if err == nil && item.expectedErr {
+			t.Errorf("Item %d, “%s”: error expected", i, item.description)
+			continue
+
+		} else if err != nil && !item.expectedErr {
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
+			continue
+		}
+
+		if !item.expectedErr && !equalClients(c, &item.expected) {
+			t.Errorf("Item %d, “%s”: objects mismatch. Expecting “%+v”; found “%+v”",
+				i, item.description, item.expected, c)
+		}
+	}
 }
 
 func TestSave(t *testing.T) {
@@ -624,13 +705,18 @@ func TestSave(t *testing.T) {
 			fmt.Printf(">>> Running TestSave for index %d\n", i)
 		}
 
-		c := NewClientMock()
-
-		if item.init != nil {
-			item.init(c)
+		mock := NewClientMock()
+		c := Client{
+			etcdClient: mock,
+			config:     reflect.ValueOf(item.config),
+			info:       make(map[string]info),
 		}
 
-		err := Save(item.config, c)
+		if item.init != nil {
+			item.init(mock)
+		}
+
+		err := c.Save()
 		if err == nil && item.expectedErr {
 			t.Errorf("Item %d, “%s”: error expected", i, item.description)
 			continue
@@ -640,21 +726,27 @@ func TestSave(t *testing.T) {
 			continue
 		}
 
-		if !item.expectedErr && !equalNodes(c.root, &item.expected) {
+		if !item.expectedErr && !equalNodes(mock.root, &item.expected) {
 			t.Errorf("Item %d, “%s”: nodes mismatch. Expecting “%s”; found “%s”",
-				i, item.description, printNode(&item.expected), printNode(c.root))
+				i, item.description, printNode(&item.expected), printNode(mock.root))
 		}
 	}
 }
 
 func BenchmarkSave(b *testing.B) {
-	c := NewClientMock()
-	for i := 0; i < b.N; i++ {
-		err := Save(struct {
+	mock := NewClientMock()
+	c := Client{
+		etcdClient: mock,
+		config: reflect.ValueOf(struct {
 			Field string `etcd:"field"`
-		}{"value"}, c)
+		}{
+			Field: "value",
+		}),
+		info: make(map[string]info),
+	}
 
-		if err != nil {
+	for i := 0; i < b.N; i++ {
+		if err := c.Save(); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -1246,6 +1338,29 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			description: "it should fail when trying to load into a nil map",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field/subfield1",
+								Value: "value1",
+							},
+							{
+								Key:   "/field/subfield2",
+								Value: "value2",
+							},
+							{
+								Key:   "/field/subfield3",
+								Value: "value3",
+							},
+						},
+					},
+				},
+			},
 			config: &struct {
 				Field map[string]string `etcd:"/field"`
 			}{},
@@ -1270,14 +1385,20 @@ func TestLoad(t *testing.T) {
 			fmt.Printf(">>> Running TestLoad for index %d\n", i)
 		}
 
-		c := NewClientMock()
-		c.root = &item.etcdData
+		mock := NewClientMock()
+		mock.root = &item.etcdData
 
-		if item.init != nil {
-			item.init(c)
+		c := Client{
+			etcdClient: mock,
+			config:     reflect.ValueOf(item.config),
+			info:       make(map[string]info),
 		}
 
-		err := Load(item.config, c)
+		if item.init != nil {
+			item.init(mock)
+		}
+
+		err := c.Load()
 		if err == nil && item.expectedErr {
 			t.Errorf("Item %d, “%s”: error expected", i, item.description)
 			continue
@@ -1295,8 +1416,8 @@ func TestLoad(t *testing.T) {
 }
 
 func BenchmarkLoad(b *testing.B) {
-	c := NewClientMock()
-	c.root = &etcd.Node{
+	mock := NewClientMock()
+	mock.root = &etcd.Node{
 		Dir: true,
 		Nodes: etcd.Nodes{
 			{
@@ -1306,13 +1427,126 @@ func BenchmarkLoad(b *testing.B) {
 		},
 	}
 
-	config := struct {
-		Field string `etcd:"field"`
-	}{}
+	c := Client{
+		etcdClient: mock,
+		config: reflect.ValueOf(&struct {
+			Field string `etcd:"field"`
+		}{}),
+		info: make(map[string]info),
+	}
 
 	for i := 0; i < b.N; i++ {
-		if err := Load(&config, c); err != nil {
+		if err := c.Load(); err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+func TestWatch(t *testing.T) {
+	config := struct {
+		Field1  string            `etcd:"/field1"`
+		Field2  int               `etcd:"/field2"`
+		Field3  int64             `etcd:"/field3"`
+		Field4  bool              `etcd:"/field4"`
+		Field5  map[string]string `etcd:"/field5"`
+		Field6  []string          `etcd:"/field6"`
+		Field7  []int             `etcd:"/field7"`
+		Field8  []int64           `etcd:"/field8"`
+		Field9  []bool            `etcd:"/field9"`
+		Field10 struct {
+			Subfield1 string `etcd:"/subfield1"`
+			Subfield2 int    `etcd:"/subfield2"`
+			Subfield3 int64  `etcd:"/subfield3"`
+			Subfield4 bool   `etcd:"/subfield4"`
+		} `etcd:"/field10"`
+	}{}
+
+	info := map[string]info{
+		"/field1":            info{field: reflect.ValueOf(config.Field1)},
+		"/field2":            info{field: reflect.ValueOf(config.Field2)},
+		"/field3":            info{field: reflect.ValueOf(config.Field3)},
+		"/field4":            info{field: reflect.ValueOf(config.Field4)},
+		"/field5":            info{field: reflect.ValueOf(config.Field5)},
+		"/field6":            info{field: reflect.ValueOf(config.Field6)},
+		"/field7":            info{field: reflect.ValueOf(config.Field7)},
+		"/field8":            info{field: reflect.ValueOf(config.Field8)},
+		"/field9":            info{field: reflect.ValueOf(config.Field9)},
+		"/field10":           info{field: reflect.ValueOf(config.Field10)},
+		"/field10/subfield1": info{field: reflect.ValueOf(config.Field10.Subfield1)},
+		"/field10/subfield2": info{field: reflect.ValueOf(config.Field10.Subfield2)},
+		"/field10/subfield3": info{field: reflect.ValueOf(config.Field10.Subfield3)},
+		"/field10/subfield4": info{field: reflect.ValueOf(config.Field10.Subfield4)},
+	}
+
+	data := []struct {
+		description string            // describe the test case
+		init        func(*clientMock) // initial configuration of the mocked client (if necessary)
+		etcdData    etcd.Node         // etcd state before watching a field
+		field       interface{}       // field that will be monitored for changes
+		changeValue string            // value injected in the change
+		expectedErr bool              // error expectation when watching the configuration
+		expected    interface{}       // value expected in the field after the callback is called
+	}{
+		{
+			description: "it should watch a string field",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field1",
+						Value: "value1",
+					},
+				},
+			},
+			field:       config.Field1,
+			changeValue: "value1 modified",
+			expected:    "value1 modified",
+		},
+	}
+
+	for i, item := range data {
+		if DEBUG {
+			fmt.Printf(">>> Running TestWatch for index %d\n", i)
+		}
+
+		mock := NewClientMock()
+		mock.root = &item.etcdData
+
+		c := Client{
+			etcdClient: mock,
+			config:     reflect.ValueOf(config),
+			info:       info,
+		}
+
+		if item.init != nil {
+			item.init(mock)
+		}
+
+		done := make(chan bool)
+		stop, err := c.Watch(item.field, func() {
+			done <- true
+		})
+
+		if err == nil && item.expectedErr {
+			t.Errorf("Item %d, “%s”: error expected", i, item.description)
+			continue
+
+		} else if err != nil && !item.expectedErr {
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
+			continue
+		}
+
+		if err != nil {
+			continue
+		}
+
+		mock.notifyChange(item.changeValue)
+		<-done
+		close(stop)
+
+		if !reflect.DeepEqual(item.field, item.expected) {
+			t.Errorf("Item %d, “%s”: fields mismatch. Expecting “%+v”; found “%+v”",
+				i, item.description, item.expected, item.field)
 		}
 	}
 }
@@ -1324,12 +1558,14 @@ func BenchmarkLoad(b *testing.B) {
 type clientMock struct {
 	root      *etcd.Node // root node
 	etcdIndex uint64     // control update sequence
+	change    chan string
 
 	// force errors for specific methods and paths
 	createDirErrors     map[string]error
 	createInOrderErrors map[string]error
 	setErrors           map[string]error
 	getErrors           map[string]error
+	watchErrors         map[string]error
 }
 
 func NewClientMock() *clientMock {
@@ -1337,10 +1573,12 @@ func NewClientMock() *clientMock {
 		root: &etcd.Node{
 			Dir: true,
 		},
+		change:              make(chan string),
 		createDirErrors:     make(map[string]error),
 		createInOrderErrors: make(map[string]error),
 		setErrors:           make(map[string]error),
 		getErrors:           make(map[string]error),
+		watchErrors:         make(map[string]error),
 	}
 }
 
@@ -1538,6 +1776,59 @@ func (c *clientMock) Get(path string, sort, recursive bool) (*etcd.Response, err
 	}, nil
 }
 
+func (c *clientMock) Watch(
+	path string,
+	waitIndex uint64,
+	recursive bool,
+	receiver chan *etcd.Response,
+	stop chan bool,
+) (*etcd.Response, error) {
+
+	if DEBUG {
+		fmt.Printf(" - Watching path %s\n", path)
+	}
+
+	if err := c.watchErrors[path]; err != nil {
+		return nil, err
+	}
+
+	current := c.root
+	currentPath := c.root.Key
+	parts := strings.Split(path, "/")
+
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		currentPath += "/" + part
+
+		found := false
+		for _, n := range current.Nodes {
+			if n.Key == currentPath {
+				found = true
+				current = n
+				break
+			}
+		}
+
+		if !found {
+			return nil, &etcd.EtcdError{ErrorCode: int(etcdErrorCodeKeyNotFound), Message: path}
+		}
+	}
+
+	select {
+	case value := <-c.change:
+		current.Value = value
+
+		receiver <- &etcd.Response{
+			Action:    "get",
+			Node:      current,
+			EtcdIndex: c.etcdIndex,
+		}
+	case <-stop:
+	}
+
+	return nil, nil
+}
+
 func (c *clientMock) createDirsInPath(path string, ttl uint64) *etcd.Node {
 	if DEBUG {
 		fmt.Printf("  > Creating parent paths %s\n", path)
@@ -1583,6 +1874,22 @@ func (c *clientMock) createDirsInPath(path string, ttl uint64) *etcd.Node {
 	}
 
 	return current
+}
+
+func (c *clientMock) notifyChange(value string) {
+	c.change <- value
+}
+
+func equalClients(c1, c2 *Client) bool {
+	if c1.config != c2.config ||
+		!reflect.DeepEqual(c1.info, c2.info) ||
+		(c1.etcdClient == nil && c2.etcdClient != nil) ||
+		(c1.etcdClient != nil && c2.etcdClient == nil) {
+
+		return false
+	}
+
+	return true
 }
 
 func equalNodes(n1, n2 *etcd.Node) bool {

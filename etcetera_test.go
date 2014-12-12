@@ -2159,6 +2159,9 @@ func (c *clientMock) createDirsInPath(path string, ttl uint64) *etcd.Node {
 }
 
 func (c *clientMock) notifyChange(node etcd.Node) {
+	c.etcdIndex++
+	node.ModifiedIndex = c.etcdIndex
+	// TODO: Modify all children nodes versions
 	c.change <- node
 }
 

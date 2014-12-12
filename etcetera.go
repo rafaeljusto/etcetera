@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -25,6 +26,10 @@ var (
 	// ErrFieldNotMapped alert whenever you try to access a field that wasn't loaded in the client
 	// structure. If we don't load the field before we cannot determinate the path or version
 	ErrFieldNotMapped = errors.New("etcetera: trying to retrieve information of a field that wasn't previously loaded")
+
+	// ErrFieldNotAddr is throw when a field that cannot be addressable is used in a place that we
+	// need the pointer to identify the path related to the field
+	ErrFieldNotAddr = errors.New("etcetera: field must be a pointer or an addressable value")
 )
 
 // https://github.com/coreos/etcd/blob/master/error/error.go
@@ -88,10 +93,11 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 		fieldType := config.Type().Field(i)
 		fieldValue := config.Field(i)
 
-		path := pathSuffix + fieldType.Tag.Get("etcd")
+		path := fieldType.Tag.Get("etcd")
 		if len(path) == 0 {
 			continue
 		}
+		path = pathSuffix + path
 
 		switch fieldValue.Kind() {
 		case reflect.Struct:
@@ -205,29 +211,18 @@ func (c *Client) load(config reflect.Value, pathSuffix string) error {
 		fieldType := config.Type().Field(i)
 		fieldValue := config.Field(i)
 
-		path := pathSuffix + fieldType.Tag.Get("etcd")
+		path := fieldType.Tag.Get("etcd")
 		if len(path) == 0 {
 			continue
 		}
-
-		if fieldValue.Kind() == reflect.Struct {
-			if err := c.load(fieldValue.Addr(), path); err != nil {
-				return err
-			}
-
-			c.info[path] = info{
-				field: fieldValue,
-			}
-
-			continue
-		}
+		path = pathSuffix + path
 
 		response, err := c.etcdClient.Get(path, true, true)
 		if err != nil {
 			return err
 		}
 
-		if err := c.fillValue(fieldValue, response); err != nil {
+		if err := c.fillValue(fieldValue, response.Node, path); err != nil {
 			return err
 		}
 	}
@@ -240,23 +235,26 @@ func (c *Client) load(config reflect.Value, pathSuffix string) error {
 // returning channel
 func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) {
 	fieldValue := reflect.ValueOf(field)
+	if fieldValue.Kind() == reflect.Ptr {
+		fieldValue = fieldValue.Elem()
+
+	} else if !fieldValue.CanAddr() {
+		return nil, ErrFieldNotAddr
+	}
 
 	var path string
 	var info info
 
 	found := false
 	for path, info = range c.info {
-		if info.field.CanAddr() != fieldValue.CanAddr() {
-			continue
+		// Match the pointer, type and name to avoid problems for struct and first field that have the
+		// same memory address
+		if info.field.Addr().Pointer() == fieldValue.Addr().Pointer() &&
+			info.field.Type().Name() == fieldValue.Type().Name() &&
+			info.field.Kind() == fieldValue.Kind() {
 
-		} else if info.field.CanAddr() {
-			if info.field.Addr().Pointer() == fieldValue.Addr().Pointer() {
-				found = true
-				break
-			}
-
-		} else {
-			// TODO?!?
+			found = true
+			break
 		}
 	}
 
@@ -273,11 +271,7 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 		for {
 			select {
 			case response := <-receiver:
-				if err := c.fillValue(fieldValue, response); err != nil {
-					// TODO: Error setting the value
-					continue
-				}
-
+				c.fillValue(fieldValue, response.Node, path)
 				callback()
 
 			case <-stop:
@@ -286,27 +280,54 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 		}
 	}()
 
-	return nil, nil
+	return stop, nil
 }
 
-func (c *Client) fillValue(fieldValue reflect.Value, response *etcd.Response) error {
+func (c *Client) fillValue(fieldValue reflect.Value, node *etcd.Node, pathSuffix string) error {
 	switch fieldValue.Kind() {
+	case reflect.Struct:
+		for i := 0; i < fieldValue.NumField(); i++ {
+			fieldType := fieldValue.Type().Field(i)
+			subfieldValue := fieldValue.Field(i)
+
+			path := fieldType.Tag.Get("etcd")
+			if len(path) == 0 {
+				continue
+			}
+			path = pathSuffix + path
+
+			for _, child := range node.Nodes {
+				if path == child.Key {
+					if err := c.fillValue(subfieldValue, child, path); err != nil {
+						return err
+					}
+					break
+				}
+			}
+		}
+
 	case reflect.Map:
 		if fieldValue.IsNil() {
 			return ErrNotInitialized
 		}
 
-		for _, node := range response.Node.Nodes {
+		fieldValue.Set(reflect.MakeMap(fieldValue.Type()))
+
+		for _, node := range node.Nodes {
+			pathParts := strings.Split(node.Key, "/")
+
 			fieldValue.SetMapIndex(
-				reflect.ValueOf(node.Key),
+				reflect.ValueOf(pathParts[len(pathParts)-1]),
 				reflect.ValueOf(node.Value),
 			)
 		}
 
 	case reflect.Slice:
+		fieldValue.Set(reflect.MakeSlice(fieldValue.Type(), 0, len(node.Nodes)))
+
 		switch fieldValue.Type().Elem().Kind() {
 		case reflect.Struct:
-			for _, node := range response.Node.Nodes {
+			for _, node := range node.Nodes {
 				newElement := reflect.New(fieldValue.Type().Elem())
 				if err := c.load(newElement, node.Key); err != nil {
 					return err
@@ -316,12 +337,12 @@ func (c *Client) fillValue(fieldValue reflect.Value, response *etcd.Response) er
 			}
 
 		case reflect.String:
-			for _, node := range response.Node.Nodes {
+			for _, node := range node.Nodes {
 				fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(node.Value)))
 			}
 
 		case reflect.Int:
-			for _, node := range response.Node.Nodes {
+			for _, node := range node.Nodes {
 				value, err := strconv.ParseInt(node.Value, 10, 64)
 				if err != nil {
 					return err
@@ -331,7 +352,7 @@ func (c *Client) fillValue(fieldValue reflect.Value, response *etcd.Response) er
 			}
 
 		case reflect.Int64:
-			for _, node := range response.Node.Nodes {
+			for _, node := range node.Nodes {
 				value, err := strconv.ParseInt(node.Value, 10, 64)
 				if err != nil {
 					return err
@@ -341,7 +362,7 @@ func (c *Client) fillValue(fieldValue reflect.Value, response *etcd.Response) er
 			}
 
 		case reflect.Bool:
-			for _, node := range response.Node.Nodes {
+			for _, node := range node.Nodes {
 				if node.Value == "true" {
 					fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(true)))
 				} else if node.Value == "false" {
@@ -351,10 +372,10 @@ func (c *Client) fillValue(fieldValue reflect.Value, response *etcd.Response) er
 		}
 
 	case reflect.String:
-		fieldValue.SetString(response.Node.Value)
+		fieldValue.SetString(node.Value)
 
 	case reflect.Int, reflect.Int64:
-		value, err := strconv.ParseInt(response.Node.Value, 10, 64)
+		value, err := strconv.ParseInt(node.Value, 10, 64)
 		if err != nil {
 			return err
 		}
@@ -362,16 +383,16 @@ func (c *Client) fillValue(fieldValue reflect.Value, response *etcd.Response) er
 		fieldValue.SetInt(value)
 
 	case reflect.Bool:
-		if response.Node.Value == "true" {
+		if node.Value == "true" {
 			fieldValue.SetBool(true)
-		} else if response.Node.Value == "false" {
+		} else if node.Value == "false" {
 			fieldValue.SetBool(false)
 		}
 	}
 
-	c.info[response.Node.Key] = info{
+	c.info[node.Key] = info{
 		field:   fieldValue,
-		version: response.Node.ModifiedIndex,
+		version: node.ModifiedIndex,
 	}
 
 	return nil

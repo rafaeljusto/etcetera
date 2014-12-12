@@ -1378,6 +1378,39 @@ func TestLoad(t *testing.T) {
 			},
 			expectedErr: true,
 		},
+		{
+			description: "it should fail when etcd data is corrupted",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key: "/field/subfield",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/subfield/subsubfield2",
+										Value: "NaN",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field struct {
+					Subfield struct {
+						Subsubfield1 string
+						Subsubfield2 int `etcd:"/subsubfield2"`
+					} `etcd:"/subfield"`
+				} `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
 	}
 
 	for i, item := range data {
@@ -1459,48 +1492,286 @@ func TestWatch(t *testing.T) {
 			Subfield3 int64  `etcd:"/subfield3"`
 			Subfield4 bool   `etcd:"/subfield4"`
 		} `etcd:"/field10"`
-	}{}
+	}{
+		Field5: make(map[string]string),
+	}
 
-	info := map[string]info{
-		"/field1":            info{field: reflect.ValueOf(config.Field1)},
-		"/field2":            info{field: reflect.ValueOf(config.Field2)},
-		"/field3":            info{field: reflect.ValueOf(config.Field3)},
-		"/field4":            info{field: reflect.ValueOf(config.Field4)},
-		"/field5":            info{field: reflect.ValueOf(config.Field5)},
-		"/field6":            info{field: reflect.ValueOf(config.Field6)},
-		"/field7":            info{field: reflect.ValueOf(config.Field7)},
-		"/field8":            info{field: reflect.ValueOf(config.Field8)},
-		"/field9":            info{field: reflect.ValueOf(config.Field9)},
-		"/field10":           info{field: reflect.ValueOf(config.Field10)},
-		"/field10/subfield1": info{field: reflect.ValueOf(config.Field10.Subfield1)},
-		"/field10/subfield2": info{field: reflect.ValueOf(config.Field10.Subfield2)},
-		"/field10/subfield3": info{field: reflect.ValueOf(config.Field10.Subfield3)},
-		"/field10/subfield4": info{field: reflect.ValueOf(config.Field10.Subfield4)},
+	etcdData := etcd.Node{
+		Dir: true,
+		Nodes: etcd.Nodes{
+			{
+				Key:   "/field1",
+				Value: "value1",
+			},
+			{
+				Key:   "/field2",
+				Value: "10",
+			},
+			{
+				Key:   "/field3",
+				Value: "20",
+			},
+			{
+				Key:   "/field4",
+				Value: "true",
+			},
+			{
+				Key: "/field5",
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field5/subfield1",
+						Value: "subvalue1",
+					},
+				},
+			},
+			{
+				Key: "/field6",
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field6/0",
+						Value: "subvalue1",
+					},
+					{
+						Key:   "/field6/1",
+						Value: "subvalue2",
+					},
+				},
+			},
+			{
+				Key: "/field7",
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field7/0",
+						Value: "100",
+					},
+					{
+						Key:   "/field7/1",
+						Value: "200",
+					},
+				},
+			},
+			{
+				Key: "/field8",
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field8/0",
+						Value: "1000",
+					},
+					{
+						Key:   "/field8/1",
+						Value: "2000",
+					},
+				},
+			},
+			{
+				Key: "/field9",
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field9/0",
+						Value: "true",
+					},
+					{
+						Key:   "/field9/1",
+						Value: "false",
+					},
+				},
+			},
+			{
+				Key: "/field10",
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field10/subfield1",
+						Value: "subvalue1",
+					},
+					{
+						Key:   "/field10/subfield2",
+						Value: "500",
+					},
+					{
+						Key:   "/field10/subfield3",
+						Value: "800",
+					},
+					{
+						Key:   "/field10/subfield4",
+						Value: "true",
+					},
+				},
+			},
+		},
 	}
 
 	data := []struct {
 		description string            // describe the test case
 		init        func(*clientMock) // initial configuration of the mocked client (if necessary)
-		etcdData    etcd.Node         // etcd state before watching a field
 		field       interface{}       // field that will be monitored for changes
-		changeValue string            // value injected in the change
+		changeValue etcd.Node         // value injected in the change
 		expectedErr bool              // error expectation when watching the configuration
 		expected    interface{}       // value expected in the field after the callback is called
 	}{
 		{
 			description: "it should watch a string field",
-			etcdData: etcd.Node{
-				Dir: true,
+			field:       &config.Field1,
+			changeValue: etcd.Node{
+				Value: "value1 modified",
+			},
+			expected: "value1 modified",
+		},
+		{
+			description: "it should watch an int field",
+			field:       &config.Field2,
+			changeValue: etcd.Node{
+				Value: "13",
+			},
+			expected: int(13),
+		},
+		{
+			description: "it should watch an int64 field",
+			field:       &config.Field3,
+			changeValue: etcd.Node{
+				Value: "27",
+			},
+			expected: int64(27),
+		},
+		{
+			description: "it should watch a bool field",
+			field:       &config.Field4,
+			changeValue: etcd.Node{
+				Value: "false",
+			},
+			expected: false,
+		},
+		{
+			description: "it should watch a map field",
+			field:       &config.Field5,
+			changeValue: etcd.Node{
 				Nodes: etcd.Nodes{
 					{
-						Key:   "/field1",
-						Value: "value1",
+						Key:   "/field5/subfield2",
+						Value: "subvalue2 modified",
+					},
+					{
+						Key:   "/field5/subfield3",
+						Value: "subvalue3 modified",
 					},
 				},
 			},
-			field:       config.Field1,
-			changeValue: "value1 modified",
-			expected:    "value1 modified",
+			expected: map[string]string{
+				"subfield2": "subvalue2 modified",
+				"subfield3": "subvalue3 modified",
+			},
+		},
+		{
+			description: "it should watch a slice of strings",
+			field:       &config.Field6,
+			changeValue: etcd.Node{
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field6/0",
+						Value: "subvalue1 modified",
+					},
+					{
+						Key:   "/field6/1",
+						Value: "subvalue2 modified",
+					},
+				},
+			},
+			expected: []string{
+				"subvalue1 modified",
+				"subvalue2 modified",
+			},
+		},
+		{
+			description: "it should watch a slice of int",
+			field:       &config.Field7,
+			changeValue: etcd.Node{
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field7/0",
+						Value: "133",
+					},
+					{
+						Key:   "/field7/1",
+						Value: "212",
+					},
+				},
+			},
+			expected: []int{133, 212},
+		},
+		{
+			description: "it should watch a slice of int64",
+			field:       &config.Field8,
+			changeValue: etcd.Node{
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field8/0",
+						Value: "1486",
+					},
+					{
+						Key:   "/field8/1",
+						Value: "2950",
+					},
+				},
+			},
+			expected: []int64{1486, 2950},
+		},
+		{
+			description: "it should watch a slice of bool",
+			field:       &config.Field9,
+			changeValue: etcd.Node{
+				Nodes: etcd.Nodes{},
+			},
+			expected: []bool{},
+		},
+		{
+			description: "it should watch a structure",
+			field:       &config.Field10,
+			changeValue: etcd.Node{
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field10/subfield1",
+						Value: "subvalue1 modified",
+					},
+					{
+						Key:   "/field10/subfield2",
+						Value: "529",
+					},
+					{
+						Key:   "/field10/subfield3",
+						Value: "861",
+					},
+					{
+						Key:   "/field10/subfield4",
+						Value: "false",
+					},
+				},
+			},
+			expected: struct {
+				Subfield1 string `etcd:"/subfield1"`
+				Subfield2 int    `etcd:"/subfield2"`
+				Subfield3 int64  `etcd:"/subfield3"`
+				Subfield4 bool   `etcd:"/subfield4"`
+			}{
+				Subfield1: "subvalue1 modified",
+				Subfield2: int(529),
+				Subfield3: int64(861),
+				Subfield4: false,
+			},
+		},
+		{
+			description: "it should fail when watching an invalid field",
+			field:       "I'm not a valid field",
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when watching a field not registered before",
+			field:       &struct{}{},
+			expectedErr: true,
 		},
 	}
 
@@ -1510,16 +1781,21 @@ func TestWatch(t *testing.T) {
 		}
 
 		mock := NewClientMock()
-		mock.root = &item.etcdData
+		mock.root = &etcdData
 
 		c := Client{
 			etcdClient: mock,
-			config:     reflect.ValueOf(config),
-			info:       info,
+			config:     reflect.ValueOf(&config),
+			info:       make(map[string]info),
 		}
 
 		if item.init != nil {
 			item.init(mock)
+		}
+
+		if err := c.Load(); err != nil {
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
+			continue
 		}
 
 		done := make(chan bool)
@@ -1544,7 +1820,12 @@ func TestWatch(t *testing.T) {
 		<-done
 		close(stop)
 
-		if !reflect.DeepEqual(item.field, item.expected) {
+		value := reflect.ValueOf(item.field)
+		if value.Kind() == reflect.Ptr {
+			value = value.Elem()
+		}
+
+		if !reflect.DeepEqual(value.Interface(), item.expected) {
 			t.Errorf("Item %d, “%s”: fields mismatch. Expecting “%+v”; found “%+v”",
 				i, item.description, item.expected, item.field)
 		}
@@ -1556,9 +1837,9 @@ func TestWatch(t *testing.T) {
 //////////////////////////////////////
 
 type clientMock struct {
-	root      *etcd.Node // root node
-	etcdIndex uint64     // control update sequence
-	change    chan string
+	root      *etcd.Node     // root node
+	etcdIndex uint64         // control update sequence
+	change    chan etcd.Node // simulate config changes for watch
 
 	// force errors for specific methods and paths
 	createDirErrors     map[string]error
@@ -1573,7 +1854,7 @@ func NewClientMock() *clientMock {
 		root: &etcd.Node{
 			Dir: true,
 		},
-		change:              make(chan string),
+		change:              make(chan etcd.Node),
 		createDirErrors:     make(map[string]error),
 		createInOrderErrors: make(map[string]error),
 		setErrors:           make(map[string]error),
@@ -1815,8 +2096,9 @@ func (c *clientMock) Watch(
 	}
 
 	select {
-	case value := <-c.change:
-		current.Value = value
+	case node := <-c.change:
+		current.Value = node.Value
+		current.Nodes = node.Nodes
 
 		receiver <- &etcd.Response{
 			Action:    "get",
@@ -1876,8 +2158,8 @@ func (c *clientMock) createDirsInPath(path string, ttl uint64) *etcd.Node {
 	return current
 }
 
-func (c *clientMock) notifyChange(value string) {
-	c.change <- value
+func (c *clientMock) notifyChange(node etcd.Node) {
+	c.change <- node
 }
 
 func equalClients(c1, c2 *Client) bool {

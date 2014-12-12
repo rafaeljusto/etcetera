@@ -509,7 +509,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fail when etcd rejects to create the slice path with an unknown error",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field"] = fmt.Errorf("Generic error!")
+				c.createDirErrors["/field"] = fmt.Errorf("generic error")
 			},
 			config: struct {
 				Field []string `etcd:"/field"`
@@ -579,7 +579,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fails when etcd rejects to create the index path with an unknown error",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field/0"] = fmt.Errorf("Generic error!")
+				c.createDirErrors["/field/0"] = fmt.Errorf("generic error")
 			},
 			config: struct {
 				Field []struct {
@@ -685,7 +685,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should fails when etcd rejects to create the map path with an unknown error",
 			init: func(c *clientMock) {
-				c.createDirErrors["/field"] = fmt.Errorf("Generic error!")
+				c.createDirErrors["/field"] = fmt.Errorf("generic error")
 			},
 			config: struct {
 				Field map[string]string `etcd:"/field"`

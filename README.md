@@ -69,7 +69,8 @@ type A struct {
 ```
 
 And that's it! You can still work with your structure and now have the flexibility of a centralized
-configuration system.
+configuration system. The best part is that you can also monitor some field for changes, calling a
+callback when something happens.
 
 For now you can add a tag in the following types:
 
@@ -144,5 +145,31 @@ func ExampleLoad() {
   }
 
   fmt.Printf("%+v\n", a)
+}
+
+func ExampleWatch() {
+  a := A{
+    Field6: make(map[string]string),
+  }
+
+  client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+  if err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  if err := client.Load(); err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  _, err = client.Watch(a.Field1, func() {
+    fmt.Printf("%+v\n", a)
+  })
+
+  if err != nil {
+    fmt.Println(err.Error())
+    return
+  }
 }
 ```

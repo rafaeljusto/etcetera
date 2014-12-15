@@ -1872,6 +1872,53 @@ func TestWatch(t *testing.T) {
 	}
 }
 
+func BenchmarkWatch(b *testing.B) {
+	mock := NewClientMock()
+	mock.root = &etcd.Node{
+		Dir: true,
+		Nodes: etcd.Nodes{
+			{
+				Key:   "/field",
+				Value: "value",
+			},
+		},
+	}
+
+	s := struct {
+		Field string `etcd:"field"`
+	}{}
+
+	c := Client{
+		etcdClient: mock,
+		config:     reflect.ValueOf(&s),
+		info:       make(map[string]info),
+	}
+
+	if err := c.Load(); err != nil {
+		b.Fatal(err)
+	}
+
+	called := make(chan bool)
+	for i := 0; i < b.N; i++ {
+		stop, err := c.Watch(&s.Field, func() {
+			called <- true
+		})
+
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		mock.notifyChange(etcd.Node{
+			Value: "abc",
+		})
+
+		select {
+		case <-called:
+			close(stop)
+		}
+	}
+}
+
 //////////////////////////////////////
 //////////////////////////////////////
 //////////////////////////////////////

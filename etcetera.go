@@ -272,13 +272,14 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 			select {
 			case response := <-receiver:
 				if response != nil {
-					// TODO: When watching a directory (slice, map or structure) the response will be from the
-					// node that changed and not the entire directory. As discussed in issue #633 of etcd
-					// project they are still defining the behaviour of watch in a directory.
-					//
-					// https://github.com/coreos/etcd/issues/633
-					c.fillField(fieldValue, response.Node, path)
-					callback()
+					// When watching a directory (slice, map or structure) the response will be from the node
+					// that changed and not the entire directory. So we need to query the directory again with
+					// recursion to load it correctly.
+					response, err := c.etcdClient.Get(path, true, true)
+					if err == nil {
+						c.fillField(fieldValue, response.Node, path)
+						callback()
+					}
 				}
 
 			case <-stop:

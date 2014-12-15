@@ -101,9 +101,7 @@
 //   }
 //
 //   func ExampleLoad() {
-//     a := A{
-//       Field6: make(map[string]string),
-//     }
+//     var a A
 //
 //     client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
 //     if err != nil {
@@ -120,9 +118,7 @@
 //   }
 //
 //   func ExampleWatch() {
-//     a := A{
-//       Field6: make(map[string]string),
-//     }
+//     var a A
 //
 //     client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
 //     if err != nil {

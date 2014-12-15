@@ -346,10 +346,6 @@ func (c *Client) fillField(field reflect.Value, node *etcd.Node, pathSuffix stri
 		}
 
 	case reflect.Map:
-		if field.IsNil() {
-			return ErrNotInitialized
-		}
-
 		field.Set(reflect.MakeMap(field.Type()))
 
 		for _, node := range node.Nodes {

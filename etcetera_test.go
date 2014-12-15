@@ -70,9 +70,7 @@ func ExampleLoad() {
 		Field7 []string          `etcd:"/field7"`
 	}
 
-	a := A{
-		Field6: make(map[string]string),
-	}
+	var a A
 
 	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
 	if err != nil {
@@ -103,9 +101,7 @@ func ExampleWatch() {
 		Field7 []string          `etcd:"/field7"`
 	}
 
-	a := A{
-		Field6: make(map[string]string),
-	}
+	var a A
 
 	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
 	if err != nil {
@@ -1172,9 +1168,7 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field map[string]string `etcd:"/field"`
-			}{
-				Field: make(map[string]string),
-			},
+			}{},
 			expected: struct {
 				Field map[string]string `etcd:"/field"`
 			}{
@@ -1385,45 +1379,13 @@ func TestLoad(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			description: "it should fail when trying to load into a nil map",
-			etcdData: etcd.Node{
-				Dir: true,
-				Nodes: etcd.Nodes{
-					{
-						Key: "/field",
-						Dir: true,
-						Nodes: etcd.Nodes{
-							{
-								Key:   "/field/subfield1",
-								Value: "value1",
-							},
-							{
-								Key:   "/field/subfield2",
-								Value: "value2",
-							},
-							{
-								Key:   "/field/subfield3",
-								Value: "value3",
-							},
-						},
-					},
-				},
-			},
-			config: &struct {
-				Field map[string]string `etcd:"/field"`
-			}{},
-			expectedErr: true,
-		},
-		{
 			description: "it should fail when etcd rejects to get a map",
 			init: func(c *clientMock) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
 				Field map[string]string `etcd:"/field"`
-			}{
-				Field: make(map[string]string),
-			},
+			}{},
 			expectedErr: true,
 		},
 		{
@@ -1540,9 +1502,7 @@ func TestWatch(t *testing.T) {
 			Subfield3 int64  `etcd:"/subfield3"`
 			Subfield4 bool   `etcd:"/subfield4"`
 		} `etcd:"/field10"`
-	}{
-		Field5: make(map[string]string),
-	}
+	}{}
 
 	etcdData := etcd.Node{
 		Dir: true,

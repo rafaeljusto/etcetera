@@ -69,11 +69,42 @@ func NewClient(machines []string, config interface{}) (*Client, error) {
 		return nil, ErrInvalidConfig
 	}
 
-	return &Client{
+	c := &Client{
 		etcdClient: etcd.NewClient(machines),
 		config:     configValue,
 		info:       make(map[string]info),
-	}, nil
+	}
+
+	c.preload(c.config, "")
+	return c, nil
+}
+
+func (c *Client) preload(field reflect.Value, pathSuffix string) {
+	field = field.Elem()
+
+	switch field.Kind() {
+	case reflect.Struct:
+		for i := 0; i < field.NumField(); i++ {
+			subfield := field.Field(i)
+			subfieldType := field.Type().Field(i)
+
+			path := subfieldType.Tag.Get("etcd")
+			if len(path) == 0 {
+				continue
+			}
+			path = pathSuffix + path
+
+			c.preload(subfield.Addr(), path)
+		}
+	}
+
+	if len(pathSuffix) == 0 {
+		pathSuffix = "/"
+	}
+
+	c.info[pathSuffix] = info{
+		field: field,
+	}
 }
 
 // Save stores a structure in etcd. Only attributes with the tag 'etcd' are going to be saved.

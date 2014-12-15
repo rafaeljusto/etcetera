@@ -113,11 +113,6 @@ func ExampleWatch() {
 		return
 	}
 
-	if err := client.Load(); err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-
 	_, err = client.Watch(a.Field1, func() {
 		fmt.Printf("%+v\n", a)
 	})
@@ -129,6 +124,11 @@ func ExampleWatch() {
 }
 
 func TestNewClient(t *testing.T) {
+	test := struct {
+		Field1 string
+		Field2 int `etcd:"/field2"`
+	}{}
+
 	data := []struct {
 		description string      // describe the test case
 		machines    []string    // etcd servers
@@ -143,16 +143,24 @@ func TestNewClient(t *testing.T) {
 				"http://127.0.0.1:4002",
 				"http://127.0.0.1:4003",
 			},
-			config: &struct{}{},
+			config: &test,
 			expected: Client{
 				etcdClient: etcd.NewClient([]string{
 					"http://127.0.0.1:4001",
 					"http://127.0.0.1:4002",
 					"http://127.0.0.1:4003",
 				}),
-				config: reflect.ValueOf(&struct{}{}),
-				info:   make(map[string]info),
+				config: reflect.ValueOf(&test),
+				info: map[string]info{
+					"/":       info{field: reflect.ValueOf(&test).Elem()},
+					"/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
 			},
+		},
+		{
+			description: "it should fail to preload a non-pointer structure",
+			config:      test,
+			expectedErr: true,
 		},
 		{
 			description: "it should deny a non-pointer to structure",
@@ -1833,10 +1841,7 @@ func TestWatch(t *testing.T) {
 			item.init(mock)
 		}
 
-		if err := c.Load(); err != nil {
-			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
-			continue
-		}
+		c.preload(c.config, "")
 
 		done := make(chan bool)
 		stop, err := c.Watch(item.field, func() {
@@ -1894,9 +1899,7 @@ func BenchmarkWatch(b *testing.B) {
 		info:       make(map[string]info),
 	}
 
-	if err := c.Load(); err != nil {
-		b.Fatal(err)
-	}
+	c.preload(c.config, "")
 
 	called := make(chan bool)
 	for i := 0; i < b.N; i++ {
@@ -2254,11 +2257,41 @@ func (c *clientMock) notifyChange(node etcd.Node) {
 
 func equalClients(c1, c2 *Client) bool {
 	if c1.config != c2.config ||
-		!reflect.DeepEqual(c1.info, c2.info) ||
 		(c1.etcdClient == nil && c2.etcdClient != nil) ||
 		(c1.etcdClient != nil && c2.etcdClient == nil) {
 
 		return false
+	}
+
+	for path1, value1 := range c1.info {
+		found := false
+		for path2, value2 := range c2.info {
+			if path1 == path2 {
+				found = true
+				if !reflect.DeepEqual(value1, value2) {
+					return false
+				}
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	for path2 := range c2.info {
+		found := false
+		for path1 := range c1.info {
+			if path1 == path2 {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
 	}
 
 	return true

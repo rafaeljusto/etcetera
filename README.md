@@ -158,11 +158,6 @@ func ExampleWatch() {
     return
   }
 
-  if err := client.Load(); err != nil {
-    fmt.Println(err.Error())
-    return
-  }
-
   _, err = client.Watch(a.Field1, func() {
     fmt.Printf("%+v\n", a)
   })

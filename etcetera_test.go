@@ -1099,6 +1099,7 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field []struct {
+					Subfield0 string
 					Subfield1 int   `etcd:"/subfield1"`
 					Subfield2 int64 `etcd:"/subfield2"`
 					Subfield3 bool  `etcd:"/subfield3"`
@@ -1106,12 +1107,14 @@ func TestLoad(t *testing.T) {
 			}{},
 			expected: struct {
 				Field []struct {
+					Subfield0 string
 					Subfield1 int   `etcd:"/subfield1"`
 					Subfield2 int64 `etcd:"/subfield2"`
 					Subfield3 bool  `etcd:"/subfield3"`
 				} `etcd:"/field"`
 			}{
 				Field: []struct {
+					Subfield0 string
 					Subfield1 int   `etcd:"/subfield1"`
 					Subfield2 int64 `etcd:"/subfield2"`
 					Subfield3 bool  `etcd:"/subfield3"`
@@ -1260,10 +1263,7 @@ func TestLoad(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			description: "it should fail when etcd rejects to get an field from the structure of a slice",
-			init: func(c *clientMock) {
-				c.getErrors["/field/0/subfield"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
-			},
+			description: "it should fail when etcd returns corrupted data in a structure of a slice",
 			etcdData: etcd.Node{
 				Dir: true,
 				Nodes: etcd.Nodes{
@@ -1277,7 +1277,7 @@ func TestLoad(t *testing.T) {
 								Nodes: etcd.Nodes{
 									{
 										Key:   "/field/0/subfield",
-										Value: "10",
+										Value: "NaN",
 									},
 								},
 							},

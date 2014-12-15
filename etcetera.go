@@ -90,8 +90,8 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 	}
 
 	for i := 0; i < config.NumField(); i++ {
+		field := config.Field(i)
 		fieldType := config.Type().Field(i)
-		fieldValue := config.Field(i)
 
 		path := fieldType.Tag.Get("etcd")
 		if len(path) == 0 {
@@ -99,9 +99,9 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 		}
 		path = pathSuffix + path
 
-		switch fieldValue.Kind() {
+		switch field.Kind() {
 		case reflect.Struct:
-			if err := c.save(fieldValue, path); err != nil {
+			if err := c.save(field, path); err != nil {
 				return err
 			}
 
@@ -110,8 +110,8 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 				return err
 			}
 
-			for _, key := range fieldValue.MapKeys() {
-				value := fieldValue.MapIndex(key)
+			for _, key := range field.MapKeys() {
+				value := field.MapIndex(key)
 
 				if _, err := c.etcdClient.Set(path+"/"+key.String(), value.String(), 0); err != nil {
 					return err
@@ -123,47 +123,47 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 				return err
 			}
 
-			for i := 0; i < fieldValue.Len(); i++ {
-				value := fieldValue.Index(i)
+			for i := 0; i < field.Len(); i++ {
+				item := field.Index(i)
 
-				if value.Kind() == reflect.Struct {
+				if item.Kind() == reflect.Struct {
 					tmpPath := fmt.Sprintf("%s/%d", path, i)
 
 					if _, err := c.etcdClient.CreateDir(tmpPath, 0); err != nil && !alreadyExistsError(err) {
 						return err
 					}
 
-					if err := c.save(value, tmpPath); err != nil {
+					if err := c.save(item, tmpPath); err != nil {
 						return err
 					}
 
 				} else {
-					if _, err := c.etcdClient.CreateInOrder(path, value.String(), 0); err != nil {
+					if _, err := c.etcdClient.CreateInOrder(path, item.String(), 0); err != nil {
 						return err
 					}
 				}
 			}
 
 		case reflect.String:
-			value := fieldValue.Interface().(string)
+			value := field.Interface().(string)
 			if _, err := c.etcdClient.Set(path, value, 0); err != nil {
 				return err
 			}
 
 		case reflect.Int:
-			value := fieldValue.Interface().(int)
+			value := field.Interface().(int)
 			if _, err := c.etcdClient.Set(path, strconv.FormatInt(int64(value), 10), 0); err != nil {
 				return err
 			}
 
 		case reflect.Int64:
-			value := fieldValue.Interface().(int64)
+			value := field.Interface().(int64)
 			if _, err := c.etcdClient.Set(path, strconv.FormatInt(value, 10), 0); err != nil {
 				return err
 			}
 
 		case reflect.Bool:
-			value := fieldValue.Interface().(bool)
+			value := field.Interface().(bool)
 
 			var valueStr string
 			if value {
@@ -178,7 +178,7 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 		}
 
 		c.info[path] = info{
-			field: fieldValue,
+			field: field,
 		}
 	}
 
@@ -208,8 +208,8 @@ func (c *Client) load(config reflect.Value, pathSuffix string) error {
 	config = config.Elem()
 
 	for i := 0; i < config.NumField(); i++ {
+		field := config.Field(i)
 		fieldType := config.Type().Field(i)
-		fieldValue := config.Field(i)
 
 		path := fieldType.Tag.Get("etcd")
 		if len(path) == 0 {
@@ -222,7 +222,7 @@ func (c *Client) load(config reflect.Value, pathSuffix string) error {
 			return err
 		}
 
-		if err := c.fillValue(fieldValue, response.Node, path); err != nil {
+		if err := c.fillField(field, response.Node, path); err != nil {
 			return err
 		}
 	}
@@ -271,8 +271,15 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 		for {
 			select {
 			case response := <-receiver:
-				c.fillValue(fieldValue, response.Node, path)
-				callback()
+				if response != nil {
+					// TODO: When watching a directory (slice, map or structure) the response will be from the
+					// node that changed and not the entire directory. As discussed in issue #633 of etcd
+					// project they are still defining the behaviour of watch in a directory.
+					//
+					// https://github.com/coreos/etcd/issues/633
+					c.fillField(fieldValue, response.Node, path)
+					callback()
+				}
 
 			case <-stop:
 				return
@@ -283,14 +290,14 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 	return stop, nil
 }
 
-func (c *Client) fillValue(fieldValue reflect.Value, node *etcd.Node, pathSuffix string) error {
-	switch fieldValue.Kind() {
+func (c *Client) fillField(field reflect.Value, node *etcd.Node, pathSuffix string) error {
+	switch field.Kind() {
 	case reflect.Struct:
-		for i := 0; i < fieldValue.NumField(); i++ {
-			fieldType := fieldValue.Type().Field(i)
-			subfieldValue := fieldValue.Field(i)
+		for i := 0; i < field.NumField(); i++ {
+			subfield := field.Field(i)
+			subfieldType := field.Type().Field(i)
 
-			path := fieldType.Tag.Get("etcd")
+			path := subfieldType.Tag.Get("etcd")
 			if len(path) == 0 {
 				continue
 			}
@@ -298,7 +305,7 @@ func (c *Client) fillValue(fieldValue reflect.Value, node *etcd.Node, pathSuffix
 
 			for _, child := range node.Nodes {
 				if path == child.Key {
-					if err := c.fillValue(subfieldValue, child, path); err != nil {
+					if err := c.fillField(subfield, child, path); err != nil {
 						return err
 					}
 					break
@@ -307,38 +314,55 @@ func (c *Client) fillValue(fieldValue reflect.Value, node *etcd.Node, pathSuffix
 		}
 
 	case reflect.Map:
-		if fieldValue.IsNil() {
+		if field.IsNil() {
 			return ErrNotInitialized
 		}
 
-		fieldValue.Set(reflect.MakeMap(fieldValue.Type()))
+		field.Set(reflect.MakeMap(field.Type()))
 
 		for _, node := range node.Nodes {
 			pathParts := strings.Split(node.Key, "/")
 
-			fieldValue.SetMapIndex(
+			field.SetMapIndex(
 				reflect.ValueOf(pathParts[len(pathParts)-1]),
 				reflect.ValueOf(node.Value),
 			)
 		}
 
 	case reflect.Slice:
-		fieldValue.Set(reflect.MakeSlice(fieldValue.Type(), 0, len(node.Nodes)))
+		field.Set(reflect.MakeSlice(field.Type(), 0, len(node.Nodes)))
 
-		switch fieldValue.Type().Elem().Kind() {
+		switch field.Type().Elem().Kind() {
 		case reflect.Struct:
-			for _, node := range node.Nodes {
-				newElement := reflect.New(fieldValue.Type().Elem())
-				if err := c.load(newElement, node.Key); err != nil {
-					return err
-				}
+			for i, item := range node.Nodes {
+				newStruct := reflect.New(field.Type().Elem()).Elem()
 
-				fieldValue.Set(reflect.Append(fieldValue, newElement.Elem()))
+			SubitemLoop:
+				for _, subitem := range item.Nodes {
+					for j := 0; j < newStruct.NumField(); j++ {
+						subfield := newStruct.Field(j)
+						subfieldType := newStruct.Type().Field(j)
+
+						path := subfieldType.Tag.Get("etcd")
+						if len(path) == 0 {
+							continue
+						}
+						path = fmt.Sprintf("%s/%d%s", pathSuffix, i, path)
+
+						if path == subitem.Key {
+							if err := c.fillField(subfield, subitem, path); err != nil {
+								return err
+							}
+							continue SubitemLoop
+						}
+					}
+				}
+				field.Set(reflect.Append(field, newStruct))
 			}
 
 		case reflect.String:
 			for _, node := range node.Nodes {
-				fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(node.Value)))
+				field.Set(reflect.Append(field, reflect.ValueOf(node.Value)))
 			}
 
 		case reflect.Int:
@@ -348,7 +372,7 @@ func (c *Client) fillValue(fieldValue reflect.Value, node *etcd.Node, pathSuffix
 					return err
 				}
 
-				fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(int(value))))
+				field.Set(reflect.Append(field, reflect.ValueOf(int(value))))
 			}
 
 		case reflect.Int64:
@@ -358,21 +382,21 @@ func (c *Client) fillValue(fieldValue reflect.Value, node *etcd.Node, pathSuffix
 					return err
 				}
 
-				fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(value)))
+				field.Set(reflect.Append(field, reflect.ValueOf(value)))
 			}
 
 		case reflect.Bool:
 			for _, node := range node.Nodes {
 				if node.Value == "true" {
-					fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(true)))
+					field.Set(reflect.Append(field, reflect.ValueOf(true)))
 				} else if node.Value == "false" {
-					fieldValue.Set(reflect.Append(fieldValue, reflect.ValueOf(false)))
+					field.Set(reflect.Append(field, reflect.ValueOf(false)))
 				}
 			}
 		}
 
 	case reflect.String:
-		fieldValue.SetString(node.Value)
+		field.SetString(node.Value)
 
 	case reflect.Int, reflect.Int64:
 		value, err := strconv.ParseInt(node.Value, 10, 64)
@@ -380,18 +404,18 @@ func (c *Client) fillValue(fieldValue reflect.Value, node *etcd.Node, pathSuffix
 			return err
 		}
 
-		fieldValue.SetInt(value)
+		field.SetInt(value)
 
 	case reflect.Bool:
 		if node.Value == "true" {
-			fieldValue.SetBool(true)
+			field.SetBool(true)
 		} else if node.Value == "false" {
-			fieldValue.SetBool(false)
+			field.SetBool(false)
 		}
 	}
 
 	c.info[node.Key] = info{
-		field:   fieldValue,
+		field:   field,
 		version: node.ModifiedIndex,
 	}
 

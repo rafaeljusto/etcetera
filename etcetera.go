@@ -296,7 +296,7 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 	stop := make(chan bool)
 	receiver := make(chan *etcd.Response)
 
-	go c.etcdClient.Watch(path, info.version+1, true, receiver, stop)
+	go c.etcdClient.Watch(path, 0, true, receiver, stop)
 
 	go func() {
 		for {

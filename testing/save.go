@@ -6,17 +6,20 @@ import (
 	"github.com/rafaeljusto/etcetera"
 )
 
+// Config is an example of configuration file with the common types of fields
 type Config struct {
 	Key1 SubConfig1        `etcd:"/key1"`
 	Key2 []SubConfig2      `etcd:"/key2"`
 	Key3 map[string]string `etcd:"/key3"`
 }
 
+// SubConfig1 is an example configuration field with subfield with primitive types
 type SubConfig1 struct {
 	Subkey1 string `etcd:"/subkey1"`
 	Subkey2 int    `etcd:"/subkey2"`
 }
 
+// SubConfig2 is another example of configuration field with subfield with primitive types
 type SubConfig2 struct {
 	Subkey1 int64 `etcd:"/subkey1"`
 	Subkey2 bool  `etcd:"/subkey2"`

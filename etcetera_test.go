@@ -121,6 +121,43 @@ func ExampleWatch() {
 	close(stop)
 }
 
+func ExampleVersion() {
+	type B struct {
+		SubField1 string `etcd:"/subfield1"`
+	}
+
+	type A struct {
+		Field1 string            `etcd:"/field1"`
+		Field2 int               `etcd:"/field2"`
+		Field3 int64             `etcd:"/field3"`
+		Field4 bool              `etcd:"/field4"`
+		Field5 B                 `etcd:"/field5"`
+		Field6 map[string]string `etcd:"/field6"`
+		Field7 []string          `etcd:"/field7"`
+	}
+
+	var a A
+
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	if err := client.Load(); err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	version, err := client.Version(&a.Field1)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	fmt.Printf("%d\n", version)
+}
+
 func TestNewClient(t *testing.T) {
 	test := struct {
 		Field1 string
@@ -1884,6 +1921,115 @@ func BenchmarkWatch(b *testing.B) {
 	}
 }
 
+func TestVersion(t *testing.T) {
+	etcdData := etcd.Node{
+		Dir: true,
+		Nodes: etcd.Nodes{
+			{
+				Key:           "/field1",
+				Value:         "value1",
+				ModifiedIndex: 100,
+			},
+			{
+				Key:           "/field2",
+				Value:         "10",
+				ModifiedIndex: 200,
+			},
+			{
+				Key:           "/field3",
+				Value:         "20",
+				ModifiedIndex: 300,
+			},
+			{
+				Key:           "/field4",
+				Value:         "true",
+				ModifiedIndex: 400,
+			},
+		},
+	}
+
+	config := &struct {
+		Field1 string `etcd:"/field1"`
+		Field2 int    `etcd:"/field2"`
+		Field3 int64  `etcd:"/field3"`
+		Field4 bool   `etcd:"/field4"`
+		Extra  string
+	}{}
+
+	mock := NewClientMock()
+	mock.root = &etcdData
+
+	c := Client{
+		etcdClient: mock,
+		config:     reflect.ValueOf(config),
+		info:       make(map[string]info),
+	}
+
+	if err := c.Load(); err != nil {
+		// We are not testing load errors here, so make it fatal
+		t.Fatalf("Unexpected error. %s", err.Error())
+	}
+
+	data := []struct {
+		description string      // describe the test case
+		field       interface{} // field that you want to know the version
+		expectedErr bool        // error expectation when retrieving the verison
+		expected    uint64      // expected version of the defined field
+	}{
+		{
+			description: "it should retrieve the version correctly for field1",
+			field:       &config.Field1,
+			expected:    100,
+		},
+		{
+			description: "it should retrieve the version correctly for field2",
+			field:       &config.Field2,
+			expected:    200,
+		},
+		{
+			description: "it should retrieve the version correctly for field3",
+			field:       &config.Field3,
+			expected:    300,
+		},
+		{
+			description: "it should retrieve the version correctly for field4",
+			field:       &config.Field4,
+			expected:    400,
+		},
+		{
+			description: "it should fail to retrieve a non-addressable field",
+			field:       "Not a Field!",
+			expectedErr: true,
+		},
+		{
+			description: "it should fail to retrieve the version of a field not mapped",
+			field:       &config.Extra,
+			expectedErr: true,
+		},
+	}
+
+	for i, item := range data {
+		if DEBUG {
+			fmt.Printf(">>> Running TestVersion for index %d\n", i)
+		}
+
+		version, err := c.Version(item.field)
+		if err == nil && item.expectedErr {
+			t.Errorf("Item %d, “%s”: error expected", i, item.description)
+			continue
+
+		} else if err != nil && !item.expectedErr {
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
+			continue
+		}
+
+		if !item.expectedErr && item.expected != version {
+			t.Errorf("Item %d, “%s”: version mismatch. Expecting “%d”; found “%d”",
+				i, item.description, item.expected, version)
+		}
+	}
+}
+
 //////////////////////////////////////
 //////////////////////////////////////
 //////////////////////////////////////
@@ -2213,7 +2359,6 @@ func (c *clientMock) createDirsInPath(path string, ttl uint64) *etcd.Node {
 func (c *clientMock) notifyChange(node etcd.Node) {
 	c.etcdIndex++
 	node.ModifiedIndex = c.etcdIndex
-	// TODO: Modify all children nodes versions
 	c.change <- node
 }
 

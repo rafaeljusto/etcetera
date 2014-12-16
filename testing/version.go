@@ -44,32 +44,42 @@ func main() {
 		return
 	}
 
-	_, err = etc.Watch(&config.Key1, func() {
-		fmt.Printf("Key1 changed: %+v\n", config.Key1)
-	})
-
+	key1, err := etc.Version(&config.Key1)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	_, err = etc.Watch(&config.Key2, func() {
-		fmt.Printf("Key2 changed: %+v\n", config.Key2)
-	})
-
+	key1Subkey1, err := etc.Version(&config.Key1.Subkey1)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	_, err = etc.Watch(&config.Key3, func() {
-		fmt.Printf("Key3 changed: %+v\n", config.Key3)
-	})
-
+	key1Subkey2, err := etc.Version(&config.Key1.Subkey2)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	select {}
+	key2, err := etc.Version(&config.Key2)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	key3, err := etc.Version(&config.Key3)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf(`
+Key1: %d
+  - Subkey1: %d
+  - Subkey2: %d
+Key2: %d
+Key3: %d
+`,
+		key1, key1Subkey1, key1Subkey2, key2, key3)
 }

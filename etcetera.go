@@ -296,6 +296,7 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 	stop := make(chan bool)
 	receiver := make(chan *etcd.Response)
 
+	// We are always retrieving the last version (index) of the path
 	go c.etcdClient.Watch(path, 0, true, receiver, stop)
 
 	go func() {
@@ -448,4 +449,29 @@ func (c *Client) fillField(field reflect.Value, node *etcd.Node, pathSuffix stri
 	}
 
 	return nil
+}
+
+// Version returns the current version of a field retrieved from etcd. It does not query etcd for
+// the latest version. When the field was not retrieved from etcd yet, the version 0 is returned
+func (c *Client) Version(field interface{}) (uint64, error) {
+	fieldValue := reflect.ValueOf(field)
+	if fieldValue.Kind() == reflect.Ptr {
+		fieldValue = fieldValue.Elem()
+
+	} else if !fieldValue.CanAddr() {
+		return 0, ErrFieldNotAddr
+	}
+
+	for _, info := range c.info {
+		// Match the pointer, type and name to avoid problems for struct and first field that have the
+		// same memory address
+		if info.field.Addr().Pointer() == fieldValue.Addr().Pointer() &&
+			info.field.Type().Name() == fieldValue.Type().Name() &&
+			info.field.Kind() == fieldValue.Kind() {
+
+			return info.version, nil
+		}
+	}
+
+	return 0, ErrFieldNotMapped
 }

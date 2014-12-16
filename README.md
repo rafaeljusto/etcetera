@@ -165,4 +165,27 @@ func ExampleWatch() {
 
   close(stop)
 }
+
+func ExampleVersion() {
+  var a A
+
+  client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+  if err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  if err := client.Load(); err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  version, err := client.Version(&a.Field1)
+  if err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  fmt.Printf("%d\n", version)
+}
 ```

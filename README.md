@@ -6,9 +6,12 @@ etcetera
 [![GoDoc](https://godoc.org/github.com/rafaeljusto/etcetera?status.png)](https://godoc.org/github.com/rafaeljusto/etcetera)
 
 This is an [etcd](https://coreos.com/using-coreos/etcd/) client that uses a tagged struct to save
-and load values. etcetera is only an extra layer of abstraction over the [go-
-etcd](http://github.com/coreos/go-etcd) library. The idea was originally from Gustavo Henrique
-Montesião de Sousa ([@gustavo-hms](https://github.com/gustavo-hms)).
+and load values from the etcd cluster. etcetera is only an abstraction layer over the
+[go-etcd](http://github.com/coreos/go-etcd) library. It was designed to be simple to use and make
+transitions from JSON to key-value configuration easier.
+
+The idea was originally from my co-worker Gustavo Henrique Montesião de Sousa
+([@gustavo-hms](https://github.com/gustavo-hms)).
 
 How to use it
 -------------
@@ -89,6 +92,20 @@ For now you can add a tag in the following types:
 
 When saving or loading a structure, attributes without the tag 'etcd' or other types from the listed
 above are going to be ignored.
+
+Performance
+-----------
+
+To make the magic we use reflection, and this can degrade performance. But the purpouse is to use
+this library to centralize the configurations of your project into a etcd cluster, and for this the
+performance isn't the most important issue. Here are some benchmarks (without etcd I/O and latency
+delays):
+
+```
+BenchmarkSave  2000000         630 ns/op
+BenchmarkLoad  3000000         437 ns/op
+BenchmarkWatch  300000        4753 ns/op
+```
 
 Examples
 --------

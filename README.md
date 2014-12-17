@@ -107,6 +107,9 @@ BenchmarkLoad  3000000         437 ns/op
 BenchmarkWatch  300000        4753 ns/op
 ```
 
+Fill free to send pull requests to improve the performance or make the code cleaner (I will thank
+you a lot!). Just remember to run the tests after every code change.
+
 Examples
 --------
 

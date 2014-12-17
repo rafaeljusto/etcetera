@@ -4,7 +4,7 @@
 
 // Package etcetera is etcd client that uses a tagged struct to save and load values
 //
-// .:: How to use it ::.
+// How to use it
 //
 // Lets see an example to understand how it works. Imagine that your system today use a structure
 // for configuration everything and it is persisted in a JSON file.
@@ -50,7 +50,12 @@
 //
 //   * struct
 //   * map[string]string
-//   * slice (of types struct, string, int, int64 and bool)
+//   * map[string]struct
+//   * []string
+//   * []struct
+//   * []int
+//   * []int64
+//   * []bool
 //   * string
 //   * int
 //   * int64
@@ -59,7 +64,7 @@
 // When saving or loading a structure, attributes without the tag 'etcd' or other types from the listed
 // above are going to be ignored.
 //
-// .:: Full example ::.
+// Examples
 //
 //   type B struct {
 //     SubField1 string `etcd:"/subfield1"`

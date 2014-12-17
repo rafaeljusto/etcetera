@@ -143,9 +143,18 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 
 			for _, key := range field.MapKeys() {
 				value := field.MapIndex(key)
+				tmpPath := path + "/" + key.String()
 
-				if _, err := c.etcdClient.Set(path+"/"+key.String(), value.String(), 0); err != nil {
-					return err
+				switch value.Kind() {
+				case reflect.Struct:
+					if err := c.save(value, tmpPath); err != nil {
+						return err
+					}
+
+				case reflect.String:
+					if _, err := c.etcdClient.Set(tmpPath, value.String(), 0); err != nil {
+						return err
+					}
 				}
 			}
 
@@ -349,13 +358,31 @@ func (c *Client) fillField(field reflect.Value, node *etcd.Node, pathSuffix stri
 	case reflect.Map:
 		field.Set(reflect.MakeMap(field.Type()))
 
-		for _, node := range node.Nodes {
-			pathParts := strings.Split(node.Key, "/")
+		switch field.Type().Elem().Kind() {
+		case reflect.Struct:
+			for _, node := range node.Nodes {
+				newStruct := reflect.New(field.Type().Elem()).Elem()
+				if err := c.fillField(newStruct, node, node.Key); err != nil {
+					return err
+				}
 
-			field.SetMapIndex(
-				reflect.ValueOf(pathParts[len(pathParts)-1]),
-				reflect.ValueOf(node.Value),
-			)
+				pathParts := strings.Split(node.Key, "/")
+
+				field.SetMapIndex(
+					reflect.ValueOf(pathParts[len(pathParts)-1]),
+					newStruct,
+				)
+			}
+
+		case reflect.String:
+			for _, node := range node.Nodes {
+				pathParts := strings.Split(node.Key, "/")
+
+				field.SetMapIndex(
+					reflect.ValueOf(pathParts[len(pathParts)-1]),
+					reflect.ValueOf(node.Value),
+				)
+			}
 		}
 
 	case reflect.Slice:

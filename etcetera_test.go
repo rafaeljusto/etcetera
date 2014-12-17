@@ -479,6 +479,74 @@ func TestSave(t *testing.T) {
 			},
 		},
 		{
+			description: "it should save a map of string to struct",
+			config: struct {
+				Field map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				} `etcd:"/field"`
+			}{
+				Field: map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				}{
+					"key1": struct {
+						Subfield1 string `etcd:"/subfield1"`
+						Subfield2 int    `etcd:"/subfield2"`
+					}{
+						Subfield1: "value1",
+						Subfield2: 10,
+					},
+					"key2": struct {
+						Subfield1 string `etcd:"/subfield1"`
+						Subfield2 int    `etcd:"/subfield2"`
+					}{
+						Subfield1: "value2",
+						Subfield2: 20,
+					},
+				},
+			},
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key: "/field/key1",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/key1/subfield1",
+										Value: "value1",
+									},
+									{
+										Key:   "/field/key1/subfield2",
+										Value: "10",
+									},
+								},
+							},
+							{
+								Key: "/field/key2",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/key2/subfield1",
+										Value: "value2",
+									},
+									{
+										Key:   "/field/key2/subfield2",
+										Value: "20",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			description: "it should fail to save a non-structure",
 			config:      123,
 			expectedErr: true,
@@ -735,6 +803,39 @@ func TestSave(t *testing.T) {
 			}{
 				Field: map[string]string{
 					"subfield": "value",
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when saving a structure that is a value of a map",
+			init: func(c *clientMock) {
+				c.setErrors["/field/key1/subfield1"] = fmt.Errorf("generic error")
+			},
+			config: struct {
+				Field map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				} `etcd:"/field"`
+			}{
+				Field: map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				}{
+					"key1": struct {
+						Subfield1 string `etcd:"/subfield1"`
+						Subfield2 int    `etcd:"/subfield2"`
+					}{
+						Subfield1: "value1",
+						Subfield2: 10,
+					},
+					"key2": struct {
+						Subfield1 string `etcd:"/subfield1"`
+						Subfield2 int    `etcd:"/subfield2"`
+					}{
+						Subfield1: "value2",
+						Subfield2: 20,
+					},
 				},
 			},
 			expectedErr: true,
@@ -1181,7 +1282,7 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			description: "it should save a map of string to string",
+			description: "it should load a map of string to string",
 			etcdData: etcd.Node{
 				Dir: true,
 				Nodes: etcd.Nodes{
@@ -1215,6 +1316,80 @@ func TestLoad(t *testing.T) {
 					"subfield1": "value1",
 					"subfield2": "value2",
 					"subfield3": "value3",
+				},
+			},
+		},
+		{
+			description: "it should load a map of string to struct",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key: "/field/key1",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/key1/subfield1",
+										Value: "value1",
+									},
+									{
+										Key:   "/field/key1/subfield2",
+										Value: "10",
+									},
+								},
+							},
+							{
+								Key: "/field/key2",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/key2/subfield1",
+										Value: "value2",
+									},
+									{
+										Key:   "/field/key2/subfield2",
+										Value: "20",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				} `etcd:"/field"`
+			}{},
+			expected: struct {
+				Field map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				} `etcd:"/field"`
+			}{
+				Field: map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				}{
+					"key1": struct {
+						Subfield1 string `etcd:"/subfield1"`
+						Subfield2 int    `etcd:"/subfield2"`
+					}{
+						Subfield1: "value1",
+						Subfield2: 10,
+					},
+					"key2": struct {
+						Subfield1 string `etcd:"/subfield1"`
+						Subfield2 int    `etcd:"/subfield2"`
+					}{
+						Subfield1: "value2",
+						Subfield2: 20,
+					},
 				},
 			},
 		},
@@ -1424,6 +1599,41 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field map[string]string `etcd:"/field"`
+			}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when etcd returns a corrupted data for a struct in a map",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key: "/field/key1",
+								Dir: true,
+								Nodes: etcd.Nodes{
+									{
+										Key:   "/field/key1/subfield1",
+										Value: "value1",
+									},
+									{
+										Key:   "/field/key1/subfield2",
+										Value: "NaN",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			config: &struct {
+				Field map[string]struct {
+					Subfield1 string `etcd:"/subfield1"`
+					Subfield2 int    `etcd:"/subfield2"`
+				} `etcd:"/field"`
 			}{},
 			expectedErr: true,
 		},

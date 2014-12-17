@@ -76,7 +76,12 @@ For now you can add a tag in the following types:
 
   * struct
   * map[string]string
-  * slice (of types struct, string, int, int64 and bool)
+  * map[string]struct
+  * []string
+  * []struct
+  * []int
+  * []int64
+  * []bool
   * string
   * int
   * int64
@@ -85,8 +90,8 @@ For now you can add a tag in the following types:
 When saving or loading a structure, attributes without the tag 'etcd' or other types from the listed
 above are going to be ignored.
 
-Full example
-------------
+Examples
+--------
 
 ```go
 type B struct {

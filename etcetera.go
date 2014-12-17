@@ -46,6 +46,7 @@ type etcdErrorCode int
 // informations that are useful for controlling path versions and making the API simpler
 type Client struct {
 	etcdClient client
+	namespace  string
 	config     reflect.Value
 
 	// info creates a correlation between a path to a info structure that stores some extra
@@ -58,9 +59,12 @@ type info struct {
 	version uint64
 }
 
-// NewClient internally build a etcd client object (go-etcd library). This internal object will not
-// be visible to make the API simpler
-func NewClient(machines []string, config interface{}) (*Client, error) {
+// NewClient internally build a etcd client object (go-etcd library).
+// The machines attribute defines the etcd cluster that this client will be connect to. Now the
+// namespace defines a special root directory to build the configuration URIs, and is recommended
+// when you want to use more than one configuration structure in the same etcd. And finally the
+// config attribute is the configuration struct that you want to send or retrieve of etcd
+func NewClient(machines []string, namespace string, config interface{}) (*Client, error) {
 	configValue := reflect.ValueOf(config)
 
 	if configValue.Kind() != reflect.Ptr ||
@@ -71,15 +75,21 @@ func NewClient(machines []string, config interface{}) (*Client, error) {
 
 	c := &Client{
 		etcdClient: etcd.NewClient(machines),
+		namespace:  normalizeTag(namespace),
 		config:     configValue,
 		info:       make(map[string]info),
 	}
 
-	c.preload(c.config, "")
+	namespace = c.namespace
+	if len(namespace) > 0 {
+		namespace = "/" + namespace
+	}
+
+	c.preload(c.config, namespace)
 	return c, nil
 }
 
-func (c *Client) preload(field reflect.Value, pathSuffix string) {
+func (c *Client) preload(field reflect.Value, prefix string) {
 	field = field.Elem()
 
 	switch field.Kind() {
@@ -88,32 +98,38 @@ func (c *Client) preload(field reflect.Value, pathSuffix string) {
 			subfield := field.Field(i)
 			subfieldType := field.Type().Field(i)
 
-			path := subfieldType.Tag.Get("etcd")
+			path := normalizeTag(subfieldType.Tag.Get("etcd"))
 			if len(path) == 0 {
 				continue
 			}
-			path = pathSuffix + path
+			path = prefix + "/" + path
 
 			c.preload(subfield.Addr(), path)
 		}
 	}
 
-	if len(pathSuffix) == 0 {
-		pathSuffix = "/"
+	if len(prefix) == 0 {
+		prefix = "/"
 	}
 
-	c.info[pathSuffix] = info{
+	c.info[prefix] = info{
 		field: field,
 	}
 }
 
-// Save stores a structure in etcd. Only attributes with the tag 'etcd' are going to be saved.
-// Supported types are 'struct', 'slice', 'map', 'string', 'int', 'int64' and 'bool'
+// Save stores a structure in etcd.
+// Only attributes with the tag 'etcd' are going to be saved. Supported types are 'struct', 'slice',
+// 'map', 'string', 'int', 'int64' and 'bool'
 func (c *Client) Save() error {
-	return c.save(c.config, "")
+	namespace := c.namespace
+	if len(namespace) > 0 {
+		namespace = "/" + namespace
+	}
+
+	return c.save(c.config, namespace)
 }
 
-func (c *Client) save(config reflect.Value, pathSuffix string) error {
+func (c *Client) save(config reflect.Value, prefix string) error {
 	if config.Kind() == reflect.Ptr {
 		config = config.Elem()
 	} else if config.Kind() != reflect.Struct {
@@ -124,11 +140,11 @@ func (c *Client) save(config reflect.Value, pathSuffix string) error {
 		field := config.Field(i)
 		fieldType := config.Type().Field(i)
 
-		path := fieldType.Tag.Get("etcd")
+		path := normalizeTag(fieldType.Tag.Get("etcd"))
 		if len(path) == 0 {
 			continue
 		}
-		path = pathSuffix + path
+		path = prefix + "/" + path
 
 		switch field.Kind() {
 		case reflect.Struct:
@@ -234,14 +250,19 @@ func alreadyExistsError(err error) bool {
 	return etcderr.ErrorCode == int(etcdErrorCodeNodeExist)
 }
 
-// Load retrieves the data from the etcd into the given structure. Only attributes with the tag
-// 'etcd' will be filled. Supported types are 'struct', 'slice', 'map', 'string', 'int', 'int64' and
-// 'bool'
+// Load retrieves the data from the etcd into the given structure.
+// Only attributes with the tag 'etcd' will be filled. Supported types are 'struct', 'slice', 'map',
+// 'string', 'int', 'int64' and 'bool'
 func (c *Client) Load() error {
-	return c.load(c.config, "")
+	namespace := c.namespace
+	if len(namespace) > 0 {
+		namespace = "/" + namespace
+	}
+
+	return c.load(c.config, namespace)
 }
 
-func (c *Client) load(config reflect.Value, pathSuffix string) error {
+func (c *Client) load(config reflect.Value, prefix string) error {
 	if config.Kind() != reflect.Ptr {
 		return ErrInvalidConfig
 	}
@@ -251,11 +272,11 @@ func (c *Client) load(config reflect.Value, pathSuffix string) error {
 		field := config.Field(i)
 		fieldType := config.Type().Field(i)
 
-		path := fieldType.Tag.Get("etcd")
+		path := normalizeTag(fieldType.Tag.Get("etcd"))
 		if len(path) == 0 {
 			continue
 		}
-		path = pathSuffix + path
+		path = prefix + "/" + path
 
 		response, err := c.etcdClient.Get(path, true, true)
 		if err != nil {
@@ -270,9 +291,9 @@ func (c *Client) load(config reflect.Value, pathSuffix string) error {
 	return nil
 }
 
-// Watch keeps track of a specific field in etcd using a long polling strategy. When a change is
-// detected the callback function will run. When you want to stop watching the field, just close the
-// returning channel
+// Watch keeps track of a specific field in etcd using a long polling strategy.
+// When a change is detected the callback function will run. When you want to stop watching the
+// field, just close the returning channel
 func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) {
 	fieldValue := reflect.ValueOf(field)
 	if fieldValue.Kind() == reflect.Ptr {
@@ -332,18 +353,18 @@ func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) 
 	return stop, nil
 }
 
-func (c *Client) fillField(field reflect.Value, node *etcd.Node, pathSuffix string) error {
+func (c *Client) fillField(field reflect.Value, node *etcd.Node, prefix string) error {
 	switch field.Kind() {
 	case reflect.Struct:
 		for i := 0; i < field.NumField(); i++ {
 			subfield := field.Field(i)
 			subfieldType := field.Type().Field(i)
 
-			path := subfieldType.Tag.Get("etcd")
+			path := normalizeTag(subfieldType.Tag.Get("etcd"))
 			if len(path) == 0 {
 				continue
 			}
-			path = pathSuffix + path
+			path = prefix + "/" + path
 
 			for _, child := range node.Nodes {
 				if path == child.Key {
@@ -399,11 +420,11 @@ func (c *Client) fillField(field reflect.Value, node *etcd.Node, pathSuffix stri
 						subfield := newStruct.Field(j)
 						subfieldType := newStruct.Type().Field(j)
 
-						path := subfieldType.Tag.Get("etcd")
+						path := normalizeTag(subfieldType.Tag.Get("etcd"))
 						if len(path) == 0 {
 							continue
 						}
-						path = fmt.Sprintf("%s/%d%s", pathSuffix, i, path)
+						path = fmt.Sprintf("%s/%d/%s", prefix, i, path)
 
 						if path == subitem.Key {
 							if err := c.fillField(subfield, subitem, path); err != nil {
@@ -478,8 +499,9 @@ func (c *Client) fillField(field reflect.Value, node *etcd.Node, pathSuffix stri
 	return nil
 }
 
-// Version returns the current version of a field retrieved from etcd. It does not query etcd for
-// the latest version. When the field was not retrieved from etcd yet, the version 0 is returned
+// Version returns the current version of a field retrieved from etcd.
+// It does not query etcd for the latest version. When the field was not retrieved from etcd yet,
+// the version 0 is returned
 func (c *Client) Version(field interface{}) (uint64, error) {
 	fieldValue := reflect.ValueOf(field)
 	if fieldValue.Kind() == reflect.Ptr {
@@ -501,4 +523,18 @@ func (c *Client) Version(field interface{}) (uint64, error) {
 	}
 
 	return 0, ErrFieldNotMapped
+}
+
+// normalizeTag removes the slash from the beggining or end of the tag name and replace the other
+// slashs with hyphens. The idea is to limit the hierarchy to the configuration structure
+func normalizeTag(tag string) string {
+	for strings.HasPrefix(tag, "/") {
+		tag = strings.TrimPrefix(tag, "/")
+	}
+
+	for strings.HasSuffix(tag, "/") {
+		tag = strings.TrimSuffix(tag, "/")
+	}
+
+	return strings.Replace(tag, "/", "-", -1)
 }

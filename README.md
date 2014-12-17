@@ -57,23 +57,30 @@ an URI of etcd using tags as it is for JSON. Lets look our example:
 
 ```go
 type B struct {
-  SubField1 string `etcd:"/subfield1"`
+  SubField1 string `etcd:"subfield1"`
 }
 
 type A struct {
-  Field1 string            `etcd:"/field1"`
-  Field2 int               `etcd:"/field2"`
-  Field3 int64             `etcd:"/field3"`
-  Field4 bool              `etcd:"/field4"`
-  Field5 B                 `etcd:"/field5"`
-  Field6 map[string]string `etcd:"/field6"`
-  Field7 []string          `etcd:"/field7"`
+  Field1 string            `etcd:"field1"`
+  Field2 int               `etcd:"field2"`
+  Field3 int64             `etcd:"field3"`
+  Field4 bool              `etcd:"field4"`
+  Field5 B                 `etcd:"field5"`
+  Field6 map[string]string `etcd:"field6"`
+  Field7 []string          `etcd:"field7"`
 }
 ```
 
 And that's it! You can still work with your structure and now have the flexibility of a centralized
 configuration system. The best part is that you can also monitor some field for changes, calling a
 callback when something happens.
+
+What happens is that the library will build the URI of etcd based on the tags, so if we want to look
+for the "A.FieldB.SubField1" field in etcd we would have to look at the URI "/field5/subfield1".
+Now, using just this strategy would limit to have only one configuration structure in the etcd
+cluster, for that reason you can define a namespace in the constructor. For example, when checking
+the same field "A.FieldB.SubField1" with the namespace "test" the URI to look for would be
+"/test/field5/subfield1".
 
 For now you can add a tag in the following types:
 
@@ -102,9 +109,9 @@ performance isn't the most important issue. Here are some benchmarks (without et
 delays):
 
 ```
-BenchmarkSave  2000000         630 ns/op
-BenchmarkLoad  3000000         437 ns/op
-BenchmarkWatch  300000        4753 ns/op
+BenchmarkSave  2000000         710 ns/op
+BenchmarkLoad  2000000         625 ns/op
+BenchmarkWatch  300000        4890 ns/op
 ```
 
 Fill free to send pull requests to improve the performance or make the code cleaner (I will thank
@@ -115,17 +122,17 @@ Examples
 
 ```go
 type B struct {
-  SubField1 string `etcd:"/subfield1"`
+  SubField1 string `etcd:"subfield1"`
 }
 
 type A struct {
-  Field1 string            `etcd:"/field1"`
-  Field2 int               `etcd:"/field2"`
-  Field3 int64             `etcd:"/field3"`
-  Field4 bool              `etcd:"/field4"`
-  Field5 B                 `etcd:"/field5"`
-  Field6 map[string]string `etcd:"/field6"`
-  Field7 []string          `etcd:"/field7"`
+  Field1 string            `etcd:"field1"`
+  Field2 int               `etcd:"field2"`
+  Field3 int64             `etcd:"field3"`
+  Field4 bool              `etcd:"field4"`
+  Field5 B                 `etcd:"field5"`
+  Field6 map[string]string `etcd:"field6"`
+  Field7 []string          `etcd:"field7"`
 }
 
 func ExampleSave() {
@@ -139,7 +146,7 @@ func ExampleSave() {
     Field7: []string{"value4", "value5", "value6"},
   }
 
-  client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+  client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
   if err != nil {
     fmt.Println(err.Error())
     return
@@ -156,7 +163,7 @@ func ExampleSave() {
 func ExampleLoad() {
   var a A
 
-  client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+  client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
   if err != nil {
     fmt.Println(err.Error())
     return
@@ -173,7 +180,7 @@ func ExampleLoad() {
 func ExampleWatch() {
   var a A
 
-  client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+  client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
   if err != nil {
     fmt.Println(err.Error())
     return
@@ -194,7 +201,7 @@ func ExampleWatch() {
 func ExampleVersion() {
   var a A
 
-  client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+  client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
   if err != nil {
     fmt.Println(err.Error())
     return

@@ -18,17 +18,17 @@ const DEBUG = false
 
 func ExampleSave() {
 	type B struct {
-		SubField1 string `etcd:"/subfield1"`
+		SubField1 string `etcd:"subfield1"`
 	}
 
 	type A struct {
-		Field1 string            `etcd:"/field1"`
-		Field2 int               `etcd:"/field2"`
-		Field3 int64             `etcd:"/field3"`
-		Field4 bool              `etcd:"/field4"`
-		Field5 B                 `etcd:"/field5"`
-		Field6 map[string]string `etcd:"/field6"`
-		Field7 []string          `etcd:"/field7"`
+		Field1 string            `etcd:"field1"`
+		Field2 int               `etcd:"field2"`
+		Field3 int64             `etcd:"field3"`
+		Field4 bool              `etcd:"field4"`
+		Field5 B                 `etcd:"field5"`
+		Field6 map[string]string `etcd:"field6"`
+		Field7 []string          `etcd:"field7"`
 	}
 
 	a := A{
@@ -41,7 +41,7 @@ func ExampleSave() {
 		Field7: []string{"value4", "value5", "value6"},
 	}
 
-	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -57,22 +57,22 @@ func ExampleSave() {
 
 func ExampleLoad() {
 	type B struct {
-		SubField1 string `etcd:"/subfield1"`
+		SubField1 string `etcd:"subfield1"`
 	}
 
 	type A struct {
-		Field1 string            `etcd:"/field1"`
-		Field2 int               `etcd:"/field2"`
-		Field3 int64             `etcd:"/field3"`
-		Field4 bool              `etcd:"/field4"`
-		Field5 B                 `etcd:"/field5"`
-		Field6 map[string]string `etcd:"/field6"`
-		Field7 []string          `etcd:"/field7"`
+		Field1 string            `etcd:"field1"`
+		Field2 int               `etcd:"field2"`
+		Field3 int64             `etcd:"field3"`
+		Field4 bool              `etcd:"field4"`
+		Field5 B                 `etcd:"field5"`
+		Field6 map[string]string `etcd:"field6"`
+		Field7 []string          `etcd:"field7"`
 	}
 
 	var a A
 
-	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -88,22 +88,22 @@ func ExampleLoad() {
 
 func ExampleWatch() {
 	type B struct {
-		SubField1 string `etcd:"/subfield1"`
+		SubField1 string `etcd:"subfield1"`
 	}
 
 	type A struct {
-		Field1 string            `etcd:"/field1"`
-		Field2 int               `etcd:"/field2"`
-		Field3 int64             `etcd:"/field3"`
-		Field4 bool              `etcd:"/field4"`
-		Field5 B                 `etcd:"/field5"`
-		Field6 map[string]string `etcd:"/field6"`
-		Field7 []string          `etcd:"/field7"`
+		Field1 string            `etcd:"field1"`
+		Field2 int               `etcd:"field2"`
+		Field3 int64             `etcd:"field3"`
+		Field4 bool              `etcd:"field4"`
+		Field5 B                 `etcd:"field5"`
+		Field6 map[string]string `etcd:"field6"`
+		Field7 []string          `etcd:"field7"`
 	}
 
 	var a A
 
-	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -123,22 +123,22 @@ func ExampleWatch() {
 
 func ExampleVersion() {
 	type B struct {
-		SubField1 string `etcd:"/subfield1"`
+		SubField1 string `etcd:"subfield1"`
 	}
 
 	type A struct {
-		Field1 string            `etcd:"/field1"`
-		Field2 int               `etcd:"/field2"`
-		Field3 int64             `etcd:"/field3"`
-		Field4 bool              `etcd:"/field4"`
-		Field5 B                 `etcd:"/field5"`
-		Field6 map[string]string `etcd:"/field6"`
-		Field7 []string          `etcd:"/field7"`
+		Field1 string            `etcd:"field1"`
+		Field2 int               `etcd:"field2"`
+		Field3 int64             `etcd:"field3"`
+		Field4 bool              `etcd:"field4"`
+		Field5 B                 `etcd:"field5"`
+		Field6 map[string]string `etcd:"field6"`
+		Field7 []string          `etcd:"field7"`
 	}
 
 	var a A
 
-	client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -161,12 +161,13 @@ func ExampleVersion() {
 func TestNewClient(t *testing.T) {
 	test := struct {
 		Field1 string
-		Field2 int `etcd:"/field2"`
+		Field2 int `etcd:"field2"`
 	}{}
 
 	data := []struct {
 		description string      // describe the test case
 		machines    []string    // etcd servers
+		namespace   string      // namespace used for this configuration
 		config      interface{} // configuration instance (structure) to save
 		expectedErr bool        // error expectation when building the object
 		expected    Client      // expected client object after calling the constructor
@@ -178,17 +179,19 @@ func TestNewClient(t *testing.T) {
 				"http://127.0.0.1:4002",
 				"http://127.0.0.1:4003",
 			},
-			config: &test,
+			namespace: "test",
+			config:    &test,
 			expected: Client{
 				etcdClient: etcd.NewClient([]string{
 					"http://127.0.0.1:4001",
 					"http://127.0.0.1:4002",
 					"http://127.0.0.1:4003",
 				}),
-				config: reflect.ValueOf(&test),
+				namespace: "test",
+				config:    reflect.ValueOf(&test),
 				info: map[string]info{
-					"/":       info{field: reflect.ValueOf(&test).Elem()},
-					"/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+					"/test":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
 				},
 			},
 		},
@@ -207,10 +210,79 @@ func TestNewClient(t *testing.T) {
 			config:      &[]int{},
 			expectedErr: true,
 		},
+		{
+			description: "it should remove initial slash from namespace",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			namespace: "/test",
+			config:    &test,
+			expected: Client{
+				etcdClient: etcd.NewClient([]string{
+					"http://127.0.0.1:4001",
+					"http://127.0.0.1:4002",
+					"http://127.0.0.1:4003",
+				}),
+				namespace: "test",
+				config:    reflect.ValueOf(&test),
+				info: map[string]info{
+					"/test":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
+			},
+		},
+		{
+			description: "it should remove final slash from namespace",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			namespace: "test/",
+			config:    &test,
+			expected: Client{
+				etcdClient: etcd.NewClient([]string{
+					"http://127.0.0.1:4001",
+					"http://127.0.0.1:4002",
+					"http://127.0.0.1:4003",
+				}),
+				namespace: "test",
+				config:    reflect.ValueOf(&test),
+				info: map[string]info{
+					"/test":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
+			},
+		},
+		{
+			description: "it should replace slashes in the middle of the namespace for hyphens",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			namespace: "test/goes/crazy",
+			config:    &test,
+			expected: Client{
+				etcdClient: etcd.NewClient([]string{
+					"http://127.0.0.1:4001",
+					"http://127.0.0.1:4002",
+					"http://127.0.0.1:4003",
+				}),
+				namespace: "test-goes-crazy",
+				config:    reflect.ValueOf(&test),
+				info: map[string]info{
+					"/test-goes-crazy":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test-goes-crazy/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
+			},
+		},
 	}
 
 	for i, item := range data {
-		c, err := NewClient(item.machines, item.config)
+		c, err := NewClient(item.machines, item.namespace, item.config)
 		if err == nil && item.expectedErr {
 			t.Errorf("Item %d, “%s”: error expected", i, item.description)
 			continue
@@ -231,24 +303,27 @@ func TestSave(t *testing.T) {
 	data := []struct {
 		description string            // describe the test case
 		init        func(*clientMock) // initial configuration of the mocked client (if necessary)
+		namespace   string            // namespace of the configuration in the etcd
 		config      interface{}       // configuration instance (structure) to save
 		expectedErr bool              // error expectation when saving the configuration
 		expected    etcd.Node         // etcd state after saving the configuration (only when there's no error)
 	}{
 		{
-			description: "it should save an one-level configuration pointer ignoring not tagged fields",
+			description: "it should save an one-level configuration pointer ignoring not tagged or invalid tag fields",
 			config: &struct {
 				Field1 string `etcd:"/field1"`
-				Field2 int    `etcd:"/field2"`
-				Field3 int64  `etcd:"/field3"`
-				Field4 bool   `etcd:"/field4"`
-				Extra  string
+				Field2 int    `etcd:"field2/"`
+				Field3 int64  `etcd:"/field3/"`
+				Field4 bool   `etcd:"//field4//"`
+				Extra1 string
+				Extra2 string `etcd:"///"`
 			}{
 				Field1: "value1",
 				Field2: 10,
 				Field3: 20,
 				Field4: true,
-				Extra:  "shouldn't be saved",
+				Extra1: "shouldn't be saved",
+				Extra2: "shouldn't be saved also",
 			},
 			expected: etcd.Node{
 				Dir: true,
@@ -276,15 +351,15 @@ func TestSave(t *testing.T) {
 			description: "it should save an embedded structure",
 			config: struct {
 				Field struct {
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
-				} `etcd:"/field"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
+				} `etcd:"field"`
 			}{
 				Field: struct {
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
 				}{
 					Subfield1: 10,
 					Subfield2: 20,
@@ -318,7 +393,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should save a slice of strings",
 			config: struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{
 				Field: []string{"value1", "value2", "value3"},
 			},
@@ -350,15 +425,15 @@ func TestSave(t *testing.T) {
 			description: "it should save a slice of structures",
 			config: struct {
 				Field []struct {
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
-				} `etcd:"/field"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
+				} `etcd:"field"`
 			}{
 				Field: []struct {
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
 				}{
 					{
 						Subfield1: 10,
@@ -446,7 +521,7 @@ func TestSave(t *testing.T) {
 		{
 			description: "it should save a map of string to string",
 			config: struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{
 				Field: map[string]string{
 					"subfield1": "value1",
@@ -482,24 +557,24 @@ func TestSave(t *testing.T) {
 			description: "it should save a map of string to struct",
 			config: struct {
 				Field map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
-				} `etcd:"/field"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
+				} `etcd:"field"`
 			}{
 				Field: map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
 				}{
 					"key1": struct {
-						Subfield1 string `etcd:"/subfield1"`
-						Subfield2 int    `etcd:"/subfield2"`
+						Subfield1 string `etcd:"subfield1"`
+						Subfield2 int    `etcd:"subfield2"`
 					}{
 						Subfield1: "value1",
 						Subfield2: 10,
 					},
 					"key2": struct {
-						Subfield1 string `etcd:"/subfield1"`
-						Subfield2 int    `etcd:"/subfield2"`
+						Subfield1 string `etcd:"subfield1"`
+						Subfield2 int    `etcd:"subfield2"`
 					}{
 						Subfield1: "value2",
 						Subfield2: 20,
@@ -557,7 +632,7 @@ func TestSave(t *testing.T) {
 				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field string `etcd:"/field"`
+				Field string `etcd:"field"`
 			}{
 				Field: "value",
 			},
@@ -569,7 +644,7 @@ func TestSave(t *testing.T) {
 				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field int `etcd:"/field"`
+				Field int `etcd:"field"`
 			}{
 				Field: 10,
 			},
@@ -581,7 +656,7 @@ func TestSave(t *testing.T) {
 				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field int64 `etcd:"/field"`
+				Field int64 `etcd:"field"`
 			}{
 				Field: 20,
 			},
@@ -593,7 +668,7 @@ func TestSave(t *testing.T) {
 				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field bool `etcd:"/field"`
+				Field bool `etcd:"field"`
 			}{
 				Field: true,
 			},
@@ -606,11 +681,11 @@ func TestSave(t *testing.T) {
 			},
 			config: struct {
 				Field struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{
 				Field: struct {
-					Subfield int `etcd:"/subfield"`
+					Subfield int `etcd:"subfield"`
 				}{
 					Subfield: 10,
 				},
@@ -623,7 +698,7 @@ func TestSave(t *testing.T) {
 				c.createDirErrors["/field"] = fmt.Errorf("generic error")
 			},
 			config: struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{
 				Field: []string{"value"},
 			},
@@ -635,7 +710,7 @@ func TestSave(t *testing.T) {
 				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeNodeExist)}
 			},
 			config: struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{
 				Field: []string{"value"},
 			},
@@ -661,7 +736,7 @@ func TestSave(t *testing.T) {
 				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{
 				Field: []string{"value"},
 			},
@@ -674,11 +749,11 @@ func TestSave(t *testing.T) {
 			},
 			config: struct {
 				Field []struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{
 				Field: []struct {
-					Subfield int `etcd:"/subfield"`
+					Subfield int `etcd:"subfield"`
 				}{
 					{
 						Subfield: 10,
@@ -694,11 +769,11 @@ func TestSave(t *testing.T) {
 			},
 			config: struct {
 				Field []struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{
 				Field: []struct {
-					Subfield int `etcd:"/subfield"`
+					Subfield int `etcd:"subfield"`
 				}{
 					{
 						Subfield: 10,
@@ -714,11 +789,11 @@ func TestSave(t *testing.T) {
 			},
 			config: struct {
 				Field []struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{
 				Field: []struct {
-					Subfield int `etcd:"/subfield"`
+					Subfield int `etcd:"subfield"`
 				}{
 					{
 						Subfield: 10,
@@ -754,11 +829,11 @@ func TestSave(t *testing.T) {
 			},
 			config: struct {
 				Field []struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{
 				Field: []struct {
-					Subfield int `etcd:"/subfield"`
+					Subfield int `etcd:"subfield"`
 				}{
 					{
 						Subfield: 10,
@@ -773,7 +848,7 @@ func TestSave(t *testing.T) {
 				c.createInOrderErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{
 				Field: []string{"value"},
 			},
@@ -785,7 +860,7 @@ func TestSave(t *testing.T) {
 				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{
 				Field: map[string]string{
 					"subfield": "value",
@@ -799,7 +874,7 @@ func TestSave(t *testing.T) {
 				c.createDirErrors["/field"] = fmt.Errorf("generic error")
 			},
 			config: struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{
 				Field: map[string]string{
 					"subfield": "value",
@@ -814,24 +889,24 @@ func TestSave(t *testing.T) {
 			},
 			config: struct {
 				Field map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
-				} `etcd:"/field"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
+				} `etcd:"field"`
 			}{
 				Field: map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
 				}{
 					"key1": struct {
-						Subfield1 string `etcd:"/subfield1"`
-						Subfield2 int    `etcd:"/subfield2"`
+						Subfield1 string `etcd:"subfield1"`
+						Subfield2 int    `etcd:"subfield2"`
 					}{
 						Subfield1: "value1",
 						Subfield2: 10,
 					},
 					"key2": struct {
-						Subfield1 string `etcd:"/subfield1"`
-						Subfield2 int    `etcd:"/subfield2"`
+						Subfield1 string `etcd:"subfield1"`
+						Subfield2 int    `etcd:"subfield2"`
 					}{
 						Subfield1: "value2",
 						Subfield2: 20,
@@ -846,7 +921,7 @@ func TestSave(t *testing.T) {
 				c.createDirErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeNodeExist)}
 			},
 			config: struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{
 				Field: map[string]string{
 					"subfield": "value",
@@ -874,13 +949,55 @@ func TestSave(t *testing.T) {
 				c.setErrors["/field/subfield"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{
 				Field: map[string]string{
 					"subfield": "value",
 				},
 			},
 			expectedErr: true,
+		},
+		{
+			description: "it should save correctly when using namespaces",
+			namespace:   "test",
+			config: &struct {
+				Field1 string `etcd:"field1"`
+				Field2 int    `etcd:"field2"`
+				Field3 int64  `etcd:"field3"`
+				Field4 bool   `etcd:"field4"`
+			}{
+				Field1: "value1",
+				Field2: 10,
+				Field3: 20,
+				Field4: true,
+			},
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/test",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/test/field1",
+								Value: "value1",
+							},
+							{
+								Key:   "/test/field2",
+								Value: "10",
+							},
+							{
+								Key:   "/test/field3",
+								Value: "20",
+							},
+							{
+								Key:   "/test/field4",
+								Value: "true",
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -892,6 +1009,7 @@ func TestSave(t *testing.T) {
 		mock := NewClientMock()
 		c := Client{
 			etcdClient: mock,
+			namespace:  item.namespace,
 			config:     reflect.ValueOf(item.config),
 			info:       make(map[string]info),
 		}
@@ -941,12 +1059,13 @@ func TestLoad(t *testing.T) {
 		description string            // describe the test case
 		init        func(*clientMock) // initial configuration of the mocked client (if necessary)
 		etcdData    etcd.Node         // etcd state before loading the configuration
+		namespace   string            // namespace of the configuration in the etcd
 		config      interface{}       // configuration structure (used to detect what we need to look for in etcd)
 		expectedErr bool              // error expectation when loading the configuration
 		expected    interface{}       // configuration instance expected after loading
 	}{
 		{
-			description: "it should load an one-level configuration ignoring not tagged fields",
+			description: "it should load an one-level configuration ignoring not tagged or invalid tag fields",
 			etcdData: etcd.Node{
 				Dir: true,
 				Nodes: etcd.Nodes{
@@ -970,17 +1089,19 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field1 string `etcd:"/field1"`
-				Field2 int    `etcd:"/field2"`
-				Field3 int64  `etcd:"/field3"`
-				Field4 bool   `etcd:"/field4"`
-				Extra  string
+				Field2 int    `etcd:"field2/"`
+				Field3 int64  `etcd:"/field3/"`
+				Field4 bool   `etcd:"//field4//"`
+				Extra1 string
+				Extra2 string `etcd:"///"`
 			}{},
 			expected: struct {
 				Field1 string `etcd:"/field1"`
-				Field2 int    `etcd:"/field2"`
-				Field3 int64  `etcd:"/field3"`
-				Field4 bool   `etcd:"/field4"`
-				Extra  string
+				Field2 int    `etcd:"field2/"`
+				Field3 int64  `etcd:"/field3/"`
+				Field4 bool   `etcd:"//field4//"`
+				Extra1 string
+				Extra2 string `etcd:"///"`
 			}{
 				Field1: "value1",
 				Field2: 10,
@@ -1015,22 +1136,22 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field1 struct {
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
-				} `etcd:"/field"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
+				} `etcd:"field"`
 			}{},
 			expected: struct {
 				Field1 struct {
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
-				} `etcd:"/field"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
+				} `etcd:"field"`
 			}{
 				Field1: struct {
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
 				}{
 					Subfield1: 10,
 					Subfield2: 20,
@@ -1064,10 +1185,10 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{},
 			expected: struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{
 				Field: []string{"value1", "value2", "value3"},
 			},
@@ -1098,10 +1219,10 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field []int `etcd:"/field"`
+				Field []int `etcd:"field"`
 			}{},
 			expected: struct {
-				Field []int `etcd:"/field"`
+				Field []int `etcd:"field"`
 			}{
 				Field: []int{10, 20, 30},
 			},
@@ -1132,10 +1253,10 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field []int64 `etcd:"/field"`
+				Field []int64 `etcd:"field"`
 			}{},
 			expected: struct {
-				Field []int64 `etcd:"/field"`
+				Field []int64 `etcd:"field"`
 			}{
 				Field: []int64{10, 20, 30},
 			},
@@ -1166,10 +1287,10 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field []bool `etcd:"/field"`
+				Field []bool `etcd:"field"`
 			}{},
 			expected: struct {
-				Field []bool `etcd:"/field"`
+				Field []bool `etcd:"field"`
 			}{
 				Field: []bool{true, false, true},
 			},
@@ -1244,24 +1365,24 @@ func TestLoad(t *testing.T) {
 			config: &struct {
 				Field []struct {
 					Subfield0 string
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
-				} `etcd:"/field"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
+				} `etcd:"field"`
 			}{},
 			expected: struct {
 				Field []struct {
 					Subfield0 string
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
-				} `etcd:"/field"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
+				} `etcd:"field"`
 			}{
 				Field: []struct {
 					Subfield0 string
-					Subfield1 int   `etcd:"/subfield1"`
-					Subfield2 int64 `etcd:"/subfield2"`
-					Subfield3 bool  `etcd:"/subfield3"`
+					Subfield1 int   `etcd:"subfield1"`
+					Subfield2 int64 `etcd:"subfield2"`
+					Subfield3 bool  `etcd:"subfield3"`
 				}{
 					{
 						Subfield1: 10,
@@ -1307,10 +1428,10 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{},
 			expected: struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{
 				Field: map[string]string{
 					"subfield1": "value1",
@@ -1362,30 +1483,30 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
-				} `etcd:"/field"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
+				} `etcd:"field"`
 			}{},
 			expected: struct {
 				Field map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
-				} `etcd:"/field"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
+				} `etcd:"field"`
 			}{
 				Field: map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
 				}{
 					"key1": struct {
-						Subfield1 string `etcd:"/subfield1"`
-						Subfield2 int    `etcd:"/subfield2"`
+						Subfield1 string `etcd:"subfield1"`
+						Subfield2 int    `etcd:"subfield2"`
 					}{
 						Subfield1: "value1",
 						Subfield2: 10,
 					},
 					"key2": struct {
-						Subfield1 string `etcd:"/subfield1"`
-						Subfield2 int    `etcd:"/subfield2"`
+						Subfield1 string `etcd:"subfield1"`
+						Subfield2 int    `etcd:"subfield2"`
 					}{
 						Subfield1: "value2",
 						Subfield2: 20,
@@ -1404,7 +1525,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field string `etcd:"/field"`
+				Field string `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1414,7 +1535,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field int `etcd:"/field"`
+				Field int `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1424,7 +1545,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field int64 `etcd:"/field"`
+				Field int64 `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1440,7 +1561,7 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field int `etcd:"/field"`
+				Field int `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1450,7 +1571,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field bool `etcd:"/field"`
+				Field bool `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1461,8 +1582,8 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1473,8 +1594,8 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field []struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1503,8 +1624,8 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field []struct {
-					Subfield int `etcd:"/subfield"`
-				} `etcd:"/field"`
+					Subfield int `etcd:"subfield"`
+				} `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1514,7 +1635,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field []string `etcd:"/field"`
+				Field []string `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1524,7 +1645,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field []int `etcd:"/field"`
+				Field []int `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1546,7 +1667,7 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field []int `etcd:"/field"`
+				Field []int `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1556,7 +1677,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field []int64 `etcd:"/field"`
+				Field []int64 `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1578,7 +1699,7 @@ func TestLoad(t *testing.T) {
 				},
 			},
 			config: &struct {
-				Field []int64 `etcd:"/field"`
+				Field []int64 `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1588,7 +1709,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field []bool `etcd:"/field"`
+				Field []bool `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1598,7 +1719,7 @@ func TestLoad(t *testing.T) {
 				c.getErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
 			},
 			config: &struct {
-				Field map[string]string `etcd:"/field"`
+				Field map[string]string `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1631,9 +1752,9 @@ func TestLoad(t *testing.T) {
 			},
 			config: &struct {
 				Field map[string]struct {
-					Subfield1 string `etcd:"/subfield1"`
-					Subfield2 int    `etcd:"/subfield2"`
-				} `etcd:"/field"`
+					Subfield1 string `etcd:"subfield1"`
+					Subfield2 int    `etcd:"subfield2"`
+				} `etcd:"field"`
 			}{},
 			expectedErr: true,
 		},
@@ -1664,11 +1785,59 @@ func TestLoad(t *testing.T) {
 				Field struct {
 					Subfield struct {
 						Subsubfield1 string
-						Subsubfield2 int `etcd:"/subsubfield2"`
-					} `etcd:"/subfield"`
-				} `etcd:"/field"`
+						Subsubfield2 int `etcd:"subsubfield2"`
+					} `etcd:"subfield"`
+				} `etcd:"field"`
 			}{},
 			expectedErr: true,
+		},
+		{
+			description: "it should load correctly when using namespaces",
+			etcdData: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/test",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/test/field1",
+								Value: "value1",
+							},
+							{
+								Key:   "/test/field2",
+								Value: "10",
+							},
+							{
+								Key:   "/test/field3",
+								Value: "20",
+							},
+							{
+								Key:   "/test/field4",
+								Value: "true",
+							},
+						},
+					},
+				},
+			},
+			namespace: "test",
+			config: &struct {
+				Field1 string `etcd:"field1"`
+				Field2 int    `etcd:"field2"`
+				Field3 int64  `etcd:"field3"`
+				Field4 bool   `etcd:"field4"`
+			}{},
+			expected: struct {
+				Field1 string `etcd:"field1"`
+				Field2 int    `etcd:"field2"`
+				Field3 int64  `etcd:"field3"`
+				Field4 bool   `etcd:"field4"`
+			}{
+				Field1: "value1",
+				Field2: 10,
+				Field3: 20,
+				Field4: true,
+			},
 		},
 	}
 
@@ -1682,6 +1851,7 @@ func TestLoad(t *testing.T) {
 
 		c := Client{
 			etcdClient: mock,
+			namespace:  item.namespace,
 			config:     reflect.ValueOf(item.config),
 			info:       make(map[string]info),
 		}
@@ -1736,21 +1906,21 @@ func BenchmarkLoad(b *testing.B) {
 
 func TestWatch(t *testing.T) {
 	config := struct {
-		Field1  string            `etcd:"/field1"`
-		Field2  int               `etcd:"/field2"`
-		Field3  int64             `etcd:"/field3"`
-		Field4  bool              `etcd:"/field4"`
-		Field5  map[string]string `etcd:"/field5"`
-		Field6  []string          `etcd:"/field6"`
-		Field7  []int             `etcd:"/field7"`
-		Field8  []int64           `etcd:"/field8"`
-		Field9  []bool            `etcd:"/field9"`
+		Field1  string            `etcd:"field1"`
+		Field2  int               `etcd:"field2"`
+		Field3  int64             `etcd:"field3"`
+		Field4  bool              `etcd:"field4"`
+		Field5  map[string]string `etcd:"field5"`
+		Field6  []string          `etcd:"field6"`
+		Field7  []int             `etcd:"field7"`
+		Field8  []int64           `etcd:"field8"`
+		Field9  []bool            `etcd:"field9"`
 		Field10 struct {
-			Subfield1 string `etcd:"/subfield1"`
-			Subfield2 int    `etcd:"/subfield2"`
-			Subfield3 int64  `etcd:"/subfield3"`
-			Subfield4 bool   `etcd:"/subfield4"`
-		} `etcd:"/field10"`
+			Subfield1 string `etcd:"subfield1"`
+			Subfield2 int    `etcd:"subfield2"`
+			Subfield3 int64  `etcd:"subfield3"`
+			Subfield4 bool   `etcd:"subfield4"`
+		} `etcd:"field10"`
 	}{}
 
 	etcdData := etcd.Node{
@@ -2009,10 +2179,10 @@ func TestWatch(t *testing.T) {
 				},
 			},
 			expected: struct {
-				Subfield1 string `etcd:"/subfield1"`
-				Subfield2 int    `etcd:"/subfield2"`
-				Subfield3 int64  `etcd:"/subfield3"`
-				Subfield4 bool   `etcd:"/subfield4"`
+				Subfield1 string `etcd:"subfield1"`
+				Subfield2 int    `etcd:"subfield2"`
+				Subfield3 int64  `etcd:"subfield3"`
+				Subfield4 bool   `etcd:"subfield4"`
 			}{
 				Subfield1: "subvalue1 modified",
 				Subfield2: int(529),
@@ -2159,10 +2329,10 @@ func TestVersion(t *testing.T) {
 	}
 
 	config := &struct {
-		Field1 string `etcd:"/field1"`
-		Field2 int    `etcd:"/field2"`
-		Field3 int64  `etcd:"/field3"`
-		Field4 bool   `etcd:"/field4"`
+		Field1 string `etcd:"field1"`
+		Field2 int    `etcd:"field2"`
+		Field3 int64  `etcd:"field3"`
+		Field4 bool   `etcd:"field4"`
 		Extra  string
 	}{}
 

@@ -29,17 +29,17 @@
 // an URI of etcd using tags as it is for JSON. Lets look our example:
 //
 //   type B struct {
-//     SubField1 string `etcd:"/subfield1"`
+//     SubField1 string `etcd:"subfield1"`
 //   }
 //
 //   type A struct {
-//     Field1 string            `etcd:"/field1"`
-//     Field2 int               `etcd:"/field2"`
-//     Field3 int64             `etcd:"/field3"`
-//     Field4 bool              `etcd:"/field4"`
-//     Field5 B                 `etcd:"/field5"`
-//     Field6 map[string]string `etcd:"/field6"`
-//     Field7 []string          `etcd:"/field7"`
+//     Field1 string            `etcd:"field1"`
+//     Field2 int               `etcd:"field2"`
+//     Field3 int64             `etcd:"field3"`
+//     Field4 bool              `etcd:"field4"`
+//     Field5 B                 `etcd:"field5"`
+//     Field6 map[string]string `etcd:"field6"`
+//     Field7 []string          `etcd:"field7"`
 //   }
 //
 // And that's it! You can still work with your structure and now have the flexibility of a centralized
@@ -67,17 +67,17 @@
 // Examples
 //
 //   type B struct {
-//     SubField1 string `etcd:"/subfield1"`
+//     SubField1 string `etcd:"subfield1"`
 //   }
 //
 //   type A struct {
-//     Field1 string            `etcd:"/field1"`
-//     Field2 int               `etcd:"/field2"`
-//     Field3 int64             `etcd:"/field3"`
-//     Field4 bool              `etcd:"/field4"`
-//     Field5 B                 `etcd:"/field5"`
-//     Field6 map[string]string `etcd:"/field6"`
-//     Field7 []string          `etcd:"/field7"`
+//     Field1 string            `etcd:"field1"`
+//     Field2 int               `etcd:"field2"`
+//     Field3 int64             `etcd:"field3"`
+//     Field4 bool              `etcd:"field4"`
+//     Field5 B                 `etcd:"field5"`
+//     Field6 map[string]string `etcd:"field6"`
+//     Field7 []string          `etcd:"field7"`
 //   }
 //
 //   func ExampleSave() {
@@ -91,7 +91,7 @@
 //       Field7: []string{"value4", "value5", "value6"},
 //     }
 //
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 //     if err != nil {
 //       fmt.Println(err.Error())
 //       return
@@ -108,7 +108,7 @@
 //   func ExampleLoad() {
 //     var a A
 //
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 //     if err != nil {
 //       fmt.Println(err.Error())
 //       return
@@ -125,7 +125,7 @@
 //   func ExampleWatch() {
 //     var a A
 //
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 //     if err != nil {
 //       fmt.Println(err.Error())
 //       return
@@ -146,7 +146,7 @@
 //   func ExampleVersion() {
 //     var a A
 //
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, &a)
+//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
 //     if err != nil {
 //       fmt.Println(err.Error())
 //       return

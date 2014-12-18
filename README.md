@@ -109,9 +109,10 @@ performance isn't the most important issue. Here are some benchmarks (without et
 delays):
 
 ```
-BenchmarkSave  2000000         710 ns/op
-BenchmarkLoad  2000000         625 ns/op
-BenchmarkWatch  300000        4890 ns/op
+BenchmarkSave      2000000         738 ns/op
+BenchmarkLoad      2000000         861 ns/op
+BenchmarkWatch      200000        5296 ns/op
+BenchmarkVersion  20000000         106 ns/op
 ```
 
 Fill free to send pull requests to improve the performance or make the code cleaner (I will thank

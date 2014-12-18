@@ -2410,6 +2410,39 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func BenchmarkVersion(b *testing.B) {
+	mock := NewClientMock()
+	mock.root = &etcd.Node{
+		Dir: true,
+		Nodes: etcd.Nodes{
+			{
+				Key:   "/field",
+				Value: "value",
+			},
+		},
+	}
+
+	config := struct {
+		Field string `etcd:"field"`
+	}{}
+
+	c := Client{
+		etcdClient: mock,
+		config:     reflect.ValueOf(&config),
+		info:       make(map[string]info),
+	}
+
+	if err := c.Load(); err != nil {
+		b.Fatal(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		if _, err := c.Version(&config.Field); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 //////////////////////////////////////
 //////////////////////////////////////
 //////////////////////////////////////

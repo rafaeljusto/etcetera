@@ -4,165 +4,49 @@
 
 // Package etcetera is etcd client that uses a tagged struct to save and load values
 //
-// How to use it
+// Behavior
 //
-// Lets see an example to understand how it works. Imagine that your system today use a structure
-// for configuration everything and it is persisted in a JSON file.
+// We took some decisions when creating this library taking into account that less is more. The
+// decisions are all listed bellow.
 //
-//   type B struct {
-//     SubField1 string `json:"subfield1"`
-//   }
+// * Always retrieving the last index
 //
-//   type A struct {
-//     Field1 string            `json:"field1"`
-//     Field2 int               `json:"field2"`
-//     Field3 int64             `json:"field3"`
-//     Field4 bool              `json:"field4"`
-//     Field5 B                 `json:"field5"`
-//     Field6 map[string]string `json:"field6"`
-//     Field7 []string          `json:"field7"`
-//   }
+//   For the use case that we thought, there's no reason (for now) to retrieve an intermediate state
+//   of a field. We are always looking for the current value in etcd. But we store the index of all
+//   attributes retrieved from etcd so that the user wants to know it (in the library we use
+//   "version" instead of "index" because it appears to have a better context).
 //
-// Now you want to start using etcd for configuration management. But the problem is that etcd works
-// with URI and key/value, and you will need to change the way your configuration was developed to fit
-// this style. Here is where this library will help you! It will map each field of the structure into
-// an URI of etcd using tags as it is for JSON. Lets look our example:
+// * Setting unlimited TTL
 //
-//   type B struct {
-//     SubField1 string `etcd:"subfield1"`
-//   }
+//   The type of data that we store in etcd (configuration values) don't need a TTL.
 //
-//   type A struct {
-//     Field1 string            `etcd:"field1"`
-//     Field2 int               `etcd:"field2"`
-//     Field3 int64             `etcd:"field3"`
-//     Field4 bool              `etcd:"field4"`
-//     Field5 B                 `etcd:"field5"`
-//     Field6 map[string]string `etcd:"field6"`
-//     Field7 []string          `etcd:"field7"`
-//   }
+// * Ignoring errors occurred in watch
 //
-// And that's it! You can still work with your structure and now have the flexibility of a centralized
-// configuration system. The best part is that you can also monitor some field for changes, calling a
-// callback when something happens.
+//   When something goes wrong while retrieving or parsing the data from etcd, we prefer to silent
+//   drop the update instead of setting a strange value to the configuration field. Another problem
+//   is to create a good API to notify about errors occurred in watch, the first idea is to use a
+//   channel for errors, but it doesn't appears to be a elegant approach, and more than that, what
+//   the user can do with this error? Well, we are still thinking about it.
 //
-// For now you can add a tag in the following types:
+// * Ignoring "directory already exist" errors
 //
-//   * struct
-//   * map[string]string
-//   * map[string]struct
-//   * []string
-//   * []struct
-//   * []int
-//   * []int64
-//   * []bool
-//   * string
-//   * int
-//   * int64
-//   * bool
+//   If the directory already exists, great! We go on and create the structure under this directory.
+//   There's no reason to stop everything because of this error.
 //
-// When saving or loading a structure, attributes without the tag 'etcd' or other types from the listed
-// above are going to be ignored.
+// * Not allowing URI in structure's field tag
 //
-// Examples
+//   This was a change made on 2014-12-17. I thought that leaving the decision to the user to create
+//   an URI in a structure's field tag could cause strange behaviors when structuring the
+//   configuration in etcd. So all the slashes in the field's tag will be replaced by hyphens,
+//   except if the slash is the first or last character
 //
-//   type B struct {
-//     SubField1 string `etcd:"subfield1"`
-//   }
+// Improve
 //
-//   type A struct {
-//     Field1 string            `etcd:"field1"`
-//     Field2 int               `etcd:"field2"`
-//     Field3 int64             `etcd:"field3"`
-//     Field4 bool              `etcd:"field4"`
-//     Field5 B                 `etcd:"field5"`
-//     Field6 map[string]string `etcd:"field6"`
-//     Field7 []string          `etcd:"field7"`
-//   }
+// There are some issues that we still need to improve in the project. First, the code readability
+// is terrible with all the reflection used, and with a good re-factory the repeated code could be
+// reused. The full test coverage will ensure that the re-factory does not break anything.
 //
-//   func ExampleSave() {
-//     a := A{
-//       Field1: "value1",
-//       Field2: 10,
-//       Field3: 999,
-//       Field4: true,
-//       Field5: B{"value2"},
-//       Field6: map[string]string{"key1": "value3"},
-//       Field7: []string{"value4", "value5", "value6"},
-//     }
-//
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
-//     if err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     if err := client.Save(); err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     fmt.Printf("%+v\n", a)
-//   }
-//
-//   func ExampleLoad() {
-//     var a A
-//
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
-//     if err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     if err := client.Load(); err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     fmt.Printf("%+v\n", a)
-//   }
-//
-//   func ExampleWatch() {
-//     var a A
-//
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
-//     if err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     stop, err := client.Watch(a.Field1, func() {
-//       fmt.Printf("%+v\n", a)
-//     })
-//
-//     if err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     close(stop)
-//   }
-//
-//   func ExampleVersion() {
-//     var a A
-//
-//     client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
-//     if err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     if err := client.Load(); err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     version, err := client.Version(&a.Field1)
-//     if err != nil {
-//       fmt.Println(err.Error())
-//       return
-//     }
-//
-//     fmt.Printf("%d\n", version)
-//   }
+// And finally, we could have concurrency issues while updating configuration fields caused by the
+// watch service. We still need to test the possible cases, but adding a read/write lock don't
+// appears to be an elegant solution.
 package etcetera

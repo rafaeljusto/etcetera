@@ -1,3 +1,7 @@
+// Copyright 2014 Rafael Dantas Justo. All rights reserved.
+// Use of this source code is governed by a MIT
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
@@ -74,8 +78,7 @@ func main() {
 		return
 	}
 
-	fmt.Printf(`
-Key1: %d
+	fmt.Printf(`Key1: %d
   - Subkey1: %d
   - Subkey2: %d
 Key2: %d

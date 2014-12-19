@@ -89,6 +89,42 @@ func NewClient(machines []string, namespace string, config interface{}) (*Client
 	return c, nil
 }
 
+// NewTLSClient internally build a etcd client object with TLS (go-etcd library). The machines
+// attribute defines the etcd cluster that this client will be connect to. The cert, key, caCert
+// attributes are the same from the go-etcd library to ensure the TLS connection. Now the namespace
+// defines a special root directory to build the configuration URIs, and is recommended when you
+// want to use more than one configuration structure in the same etcd. And finally the config
+// attribute is the configuration struct that you want to send or retrieve of etcd
+func NewTLSClient(machines []string, cert, key, caCert, namespace string, config interface{}) (*Client, error) {
+	configValue := reflect.ValueOf(config)
+
+	if configValue.Kind() != reflect.Ptr ||
+		configValue.Elem().Kind() != reflect.Struct {
+
+		return nil, ErrInvalidConfig
+	}
+
+	tlsClient, err := etcd.NewTLSClient(machines, cert, key, caCert)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &Client{
+		etcdClient: tlsClient,
+		namespace:  normalizeTag(namespace),
+		config:     configValue,
+		info:       make(map[string]info),
+	}
+
+	namespace = c.namespace
+	if len(namespace) > 0 {
+		namespace = "/" + namespace
+	}
+
+	c.preload(c.config, namespace)
+	return c, nil
+}
+
 func (c *Client) preload(field reflect.Value, prefix string) {
 	field = field.Elem()
 

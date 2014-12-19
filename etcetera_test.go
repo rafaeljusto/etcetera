@@ -5,11 +5,19 @@
 package etcetera
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"io/ioutil"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -283,6 +291,252 @@ func TestNewClient(t *testing.T) {
 
 	for i, item := range data {
 		c, err := NewClient(item.machines, item.namespace, item.config)
+		if err == nil && item.expectedErr {
+			t.Errorf("Item %d, “%s”: error expected", i, item.description)
+			continue
+
+		} else if err != nil && !item.expectedErr {
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
+			continue
+		}
+
+		if !item.expectedErr && !equalClients(c, &item.expected) {
+			t.Errorf("Item %d, “%s”: objects mismatch. Expecting “%+v”; found “%+v”",
+				i, item.description, item.expected, c)
+		}
+	}
+}
+
+func TestNewTLSClient(t *testing.T) {
+	test := struct {
+		Field1 string
+		Field2 int `etcd:"field2"`
+	}{}
+
+	cert, key, err := createCertificate()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data := []struct {
+		description string   // describe the test case
+		machines    []string // etcd servers
+		cert        string
+		key         string
+		caCert      string
+		namespace   string      // namespace used for this configuration
+		config      interface{} // configuration instance (structure) to save
+		expectedErr bool        // error expectation when building the object
+		expected    Client      // expected client object after calling the constructor
+	}{
+		{
+			description: "it should create a valid Client object",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			cert:      cert,
+			key:       key,
+			caCert:    cert,
+			namespace: "test",
+			config:    &test,
+			expected: Client{
+				etcdClient: func() *etcd.Client {
+					client, err := etcd.NewTLSClient([]string{
+						"http://127.0.0.1:4001",
+						"http://127.0.0.1:4002",
+						"http://127.0.0.1:4003",
+					}, cert, key, cert)
+
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					return client
+				}(),
+				namespace: "test",
+				config:    reflect.ValueOf(&test),
+				info: map[string]info{
+					"/test":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
+			},
+		},
+		{
+			description: "it should fail to preload a non-pointer structure",
+			config:      test,
+			expectedErr: true,
+		},
+		{
+			description: "it should deny a non-pointer to structure",
+			config:      struct{}{},
+			expectedErr: true,
+		},
+		{
+			description: "it should deny a pointer to something that is not a structure",
+			config:      &[]int{},
+			expectedErr: true,
+		},
+		{
+			description: "it should remove initial slash from namespace",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			cert:      cert,
+			key:       key,
+			caCert:    cert,
+			namespace: "/test",
+			config:    &test,
+			expected: Client{
+				etcdClient: func() *etcd.Client {
+					client, err := etcd.NewTLSClient([]string{
+						"http://127.0.0.1:4001",
+						"http://127.0.0.1:4002",
+						"http://127.0.0.1:4003",
+					}, cert, key, cert)
+
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					return client
+				}(),
+				namespace: "test",
+				config:    reflect.ValueOf(&test),
+				info: map[string]info{
+					"/test":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
+			},
+		},
+		{
+			description: "it should remove final slash from namespace",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			cert:      cert,
+			key:       key,
+			caCert:    cert,
+			namespace: "test/",
+			config:    &test,
+			expected: Client{
+				etcdClient: func() *etcd.Client {
+					client, err := etcd.NewTLSClient([]string{
+						"http://127.0.0.1:4001",
+						"http://127.0.0.1:4002",
+						"http://127.0.0.1:4003",
+					}, cert, key, cert)
+
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					return client
+				}(),
+				namespace: "test",
+				config:    reflect.ValueOf(&test),
+				info: map[string]info{
+					"/test":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
+			},
+		},
+		{
+			description: "it should replace slashes in the middle of the namespace for hyphens",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			cert:      cert,
+			key:       key,
+			caCert:    cert,
+			namespace: "test/goes/crazy",
+			config:    &test,
+			expected: Client{
+				etcdClient: func() *etcd.Client {
+					client, err := etcd.NewTLSClient([]string{
+						"http://127.0.0.1:4001",
+						"http://127.0.0.1:4002",
+						"http://127.0.0.1:4003",
+					}, cert, key, cert)
+
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					return client
+				}(),
+				namespace: "test-goes-crazy",
+				config:    reflect.ValueOf(&test),
+				info: map[string]info{
+					"/test-goes-crazy":        info{field: reflect.ValueOf(&test).Elem()},
+					"/test-goes-crazy/field2": info{field: reflect.ValueOf(&test.Field2).Elem()},
+				},
+			},
+		},
+		{
+			description: "it should fail when the certficate doesn't exists",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			cert:        "idontexist",
+			key:         key,
+			caCert:      cert,
+			namespace:   "test/goes/crazy",
+			config:      &test,
+			expectedErr: true,
+		},
+		{
+			description: "it should fail when the key doesn't exists",
+			machines: []string{
+				"http://127.0.0.1:4001",
+				"http://127.0.0.1:4002",
+				"http://127.0.0.1:4003",
+			},
+			cert:        cert,
+			key:         "idontexist",
+			caCert:      cert,
+			namespace:   "test/goes/crazy",
+			config:      &test,
+			expectedErr: true,
+		},
+		// For now go-etcd is not checking errors from CA cert in constructor. Sent a pull request to
+		// fix this issue: https://github.com/coreos/go-etcd/pull/174
+		//
+		// {
+		// 	description: "it should fail when the CA doesn't exists",
+		// 	machines: []string{
+		// 		"http://127.0.0.1:4001",
+		// 		"http://127.0.0.1:4002",
+		// 		"http://127.0.0.1:4003",
+		// 	},
+		// 	cert:        cert,
+		// 	key:         key,
+		// 	caCert:      "idontexist",
+		// 	namespace:   "test/goes/crazy",
+		// 	config:      &test,
+		// 	expectedErr: true,
+		// },
+	}
+
+	for i, item := range data {
+		c, err := NewTLSClient(
+			item.machines,
+			item.cert,
+			item.key,
+			item.caCert,
+			item.namespace,
+			item.config,
+		)
+
 		if err == nil && item.expectedErr {
 			t.Errorf("Item %d, “%s”: error expected", i, item.description)
 			continue
@@ -2870,4 +3124,63 @@ func printNode(n *etcd.Node) string {
 
 	output += "] }"
 	return output
+}
+
+func createCertificate() (string, string, error) {
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return "", "", err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Issuer: pkix.Name{
+			Organization: []string{"Etcetera Test"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA: true,
+	}
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", err
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template,
+		&template, &privateKey.PublicKey, privateKey)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	certFile, err := ioutil.TempFile("", "etcetera-cert-")
+	if err != nil {
+		return "", "", err
+	}
+	defer certFile.Close()
+
+	if err := pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		return "", "", err
+	}
+
+	keyFile, err := ioutil.TempFile("", "etcetera-key-")
+	if err != nil {
+		return "", "", err
+	}
+	defer keyFile.Close()
+
+	err = pem.Encode(keyFile, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	})
+
+	if err != nil {
+		return "", "", err
+	}
+
+	return certFile.Name(), keyFile.Name(), nil
 }

@@ -40,6 +40,11 @@
 // is terrible with all the reflection used, and with a good re-factory the repeated code could be
 // reused. The full test coverage will ensure that the re-factory does not break anything.
 //
+// Second, when watching a field, you will receive a channel to notify when you want to stop
+// watching. Now if you send a boolean false into the channel instead of closing it, we could have a
+// strange behavior since there are two go routines listening on this channel (go-etcd and etcetera
+// watch functions).
+//
 // And finally, we could have concurrency issues while updating configuration fields caused by the
 // watch service. We still need to test the possible cases, but adding a read/write lock don't
 // appears to be an elegant solution.

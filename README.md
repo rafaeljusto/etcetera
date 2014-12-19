@@ -187,7 +187,7 @@ func ExampleWatch() {
     return
   }
 
-  stop, err := client.Watch(a.Field1, func() {
+  stop, err := client.Watch(&a.Field1, func() {
     fmt.Printf("%+v\n", a)
   })
 

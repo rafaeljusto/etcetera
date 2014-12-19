@@ -294,6 +294,10 @@ func (c *Client) load(config reflect.Value, prefix string) error {
 // Watch keeps track of a specific field in etcd using a long polling strategy.
 // When a change is detected the callback function will run. When you want to stop watching the
 // field, just close the returning channel
+//
+// BUG: If the user sends a boolean false instead of closing the returning channel, we could have a
+// strange behavior since there are two go routines listening on it (go-etcd and etcetera watch
+// functions)
 func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) {
 	fieldValue := reflect.ValueOf(field)
 	if fieldValue.Kind() == reflect.Ptr {

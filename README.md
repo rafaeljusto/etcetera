@@ -109,10 +109,11 @@ performance isn't the most important issue. Here are some benchmarks (without et
 delays):
 
 ```
-BenchmarkSave      2000000         738 ns/op
-BenchmarkLoad      2000000         861 ns/op
-BenchmarkWatch      200000        5296 ns/op
-BenchmarkVersion  20000000         106 ns/op
+BenchmarkSave      2000000         760 ns/op
+BenchmarkSaveField 2000000         654 ns/op
+BenchmarkLoad      2000000         664 ns/op
+BenchmarkWatch      300000        4977 ns/op
+BenchmarkVersion  20000000         114 ns/op
 ```
 
 Fill free to send pull requests to improve the performance or make the code cleaner (I will thank
@@ -154,6 +155,25 @@ func ExampleSave() {
   }
 
   if err := client.Save(); err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  fmt.Printf("%+v\n", a)
+}
+
+func ExampleSaveField() {
+  a := A{
+    Field1: "value1 changed",
+  }
+
+  client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
+  if err != nil {
+    fmt.Println(err.Error())
+    return
+  }
+
+  if err := client.SaveField(&a.Field1); err != nil {
     fmt.Println(err.Error())
     return
   }

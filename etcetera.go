@@ -162,116 +162,126 @@ func (c *Client) Save() error {
 		namespace = "/" + namespace
 	}
 
-	return c.save(c.config, namespace)
+	return c.saveField(c.config, namespace)
 }
 
-func (c *Client) save(config reflect.Value, prefix string) error {
-	if config.Kind() == reflect.Ptr {
-		config = config.Elem()
-	} else if config.Kind() != reflect.Struct {
-		return ErrInvalidConfig
+// SaveField saves a specific field from the configuration structure.
+// Works in the same way of Save, but it can be used to save specific parts of the configuration,
+// avoiding excessive requests to etcd cluster
+func (c *Client) SaveField(field interface{}) error {
+	path, _, err := c.getInfo(field)
+	if err != nil {
+		return err
 	}
 
-	for i := 0; i < config.NumField(); i++ {
-		field := config.Field(i)
-		fieldType := config.Type().Field(i)
+	return c.saveField(reflect.ValueOf(field), path)
+}
 
-		path := normalizeTag(fieldType.Tag.Get("etcd"))
-		if len(path) == 0 {
-			continue
+func (c *Client) saveField(field reflect.Value, prefix string) error {
+	if field.Kind() == reflect.Ptr {
+		field = field.Elem()
+	}
+
+	switch field.Kind() {
+	case reflect.Struct:
+		for i := 0; i < field.NumField(); i++ {
+			subfield := field.Field(i)
+			subfieldType := field.Type().Field(i)
+
+			path := normalizeTag(subfieldType.Tag.Get("etcd"))
+			if len(path) == 0 {
+				continue
+			}
+			path = prefix + "/" + path
+
+			if err := c.saveField(subfield, path); err != nil {
+				return err
+			}
 		}
-		path = prefix + "/" + path
 
-		switch field.Kind() {
-		case reflect.Struct:
-			if err := c.save(field, path); err != nil {
-				return err
-			}
+	case reflect.Map:
+		if _, err := c.etcdClient.CreateDir(prefix, 0); err != nil && !alreadyExistsError(err) {
+			return err
+		}
 
-		case reflect.Map:
-			if _, err := c.etcdClient.CreateDir(path, 0); err != nil && !alreadyExistsError(err) {
-				return err
-			}
+		for _, key := range field.MapKeys() {
+			value := field.MapIndex(key)
+			path := prefix + "/" + key.String()
 
-			for _, key := range field.MapKeys() {
-				value := field.MapIndex(key)
-				tmpPath := path + "/" + key.String()
+			switch value.Kind() {
+			case reflect.Struct:
+				if err := c.saveField(value, path); err != nil {
+					return err
+				}
 
-				switch value.Kind() {
-				case reflect.Struct:
-					if err := c.save(value, tmpPath); err != nil {
-						return err
-					}
-
-				case reflect.String:
-					if _, err := c.etcdClient.Set(tmpPath, value.String(), 0); err != nil {
-						return err
-					}
+			case reflect.String:
+				if _, err := c.etcdClient.Set(path, value.String(), 0); err != nil {
+					return err
 				}
 			}
+		}
 
-		case reflect.Slice:
-			if _, err := c.etcdClient.CreateDir(path, 0); err != nil && !alreadyExistsError(err) {
-				return err
-			}
+	case reflect.Slice:
+		if _, err := c.etcdClient.CreateDir(prefix, 0); err != nil && !alreadyExistsError(err) {
+			return err
+		}
 
-			for i := 0; i < field.Len(); i++ {
-				item := field.Index(i)
+		for i := 0; i < field.Len(); i++ {
+			item := field.Index(i)
 
-				if item.Kind() == reflect.Struct {
-					tmpPath := fmt.Sprintf("%s/%d", path, i)
+			if item.Kind() == reflect.Struct {
+				path := fmt.Sprintf("%s/%d", prefix, i)
 
-					if _, err := c.etcdClient.CreateDir(tmpPath, 0); err != nil && !alreadyExistsError(err) {
-						return err
-					}
-
-					if err := c.save(item, tmpPath); err != nil {
-						return err
-					}
-
-				} else {
-					if _, err := c.etcdClient.CreateInOrder(path, item.String(), 0); err != nil {
-						return err
-					}
+				if _, err := c.etcdClient.CreateDir(path, 0); err != nil && !alreadyExistsError(err) {
+					return err
 				}
-			}
 
-		case reflect.String:
-			value := field.Interface().(string)
-			if _, err := c.etcdClient.Set(path, value, 0); err != nil {
-				return err
-			}
+				if err := c.saveField(item, path); err != nil {
+					return err
+				}
 
-		case reflect.Int:
-			value := field.Interface().(int)
-			if _, err := c.etcdClient.Set(path, strconv.FormatInt(int64(value), 10), 0); err != nil {
-				return err
-			}
-
-		case reflect.Int64:
-			value := field.Interface().(int64)
-			if _, err := c.etcdClient.Set(path, strconv.FormatInt(value, 10), 0); err != nil {
-				return err
-			}
-
-		case reflect.Bool:
-			value := field.Interface().(bool)
-
-			var valueStr string
-			if value {
-				valueStr = "true"
 			} else {
-				valueStr = "false"
-			}
-
-			if _, err := c.etcdClient.Set(path, valueStr, 0); err != nil {
-				return err
+				if _, err := c.etcdClient.CreateInOrder(prefix, item.String(), 0); err != nil {
+					return err
+				}
 			}
 		}
 
-		c.info[path] = info{
-			field: field,
+	case reflect.String:
+		value := field.Interface().(string)
+		if _, err := c.etcdClient.Set(prefix, value, 0); err != nil {
+			return err
 		}
+
+	case reflect.Int:
+		value := field.Interface().(int)
+		if _, err := c.etcdClient.Set(prefix, strconv.FormatInt(int64(value), 10), 0); err != nil {
+			return err
+		}
+
+	case reflect.Int64:
+		value := field.Interface().(int64)
+		if _, err := c.etcdClient.Set(prefix, strconv.FormatInt(value, 10), 0); err != nil {
+			return err
+		}
+
+	case reflect.Bool:
+		value := field.Interface().(bool)
+
+		var valueStr string
+		if value {
+			valueStr = "true"
+		} else {
+			valueStr = "false"
+		}
+
+		if _, err := c.etcdClient.Set(prefix, valueStr, 0); err != nil {
+			return err
+		}
+	}
+
+	c.info[prefix] = info{
+		field: field,
 	}
 
 	return nil
@@ -335,32 +345,14 @@ func (c *Client) load(config reflect.Value, prefix string) error {
 // could have a strange behavior since there are two go routines listening on it (go-etcd and
 // etcetera watch functions)
 func (c *Client) Watch(field interface{}, callback func()) (chan<- bool, error) {
+	path, _, err := c.getInfo(field)
+	if err != nil {
+		return nil, err
+	}
+
 	fieldValue := reflect.ValueOf(field)
 	if fieldValue.Kind() == reflect.Ptr {
 		fieldValue = fieldValue.Elem()
-
-	} else if !fieldValue.CanAddr() {
-		return nil, ErrFieldNotAddr
-	}
-
-	var path string
-	var info info
-
-	found := false
-	for path, info = range c.info {
-		// Match the pointer, type and name to avoid problems for struct and first field that have the
-		// same memory address
-		if info.field.Addr().Pointer() == fieldValue.Addr().Pointer() &&
-			info.field.Type().Name() == fieldValue.Type().Name() &&
-			info.field.Kind() == fieldValue.Kind() {
-
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return nil, ErrFieldNotMapped
 	}
 
 	stop := make(chan bool)
@@ -543,26 +535,41 @@ func (c *Client) fillField(field reflect.Value, node *etcd.Node, prefix string) 
 // It does not query etcd for the latest version. When the field was not retrieved from etcd yet,
 // the version 0 is returned
 func (c *Client) Version(field interface{}) (uint64, error) {
+	_, info, err := c.getInfo(field)
+	if err != nil {
+		return 0, err
+	}
+	return info.version, nil
+}
+
+func (c *Client) getInfo(field interface{}) (path string, info info, err error) {
 	fieldValue := reflect.ValueOf(field)
 	if fieldValue.Kind() == reflect.Ptr {
 		fieldValue = fieldValue.Elem()
 
 	} else if !fieldValue.CanAddr() {
-		return 0, ErrFieldNotAddr
+		err = ErrFieldNotAddr
+		return
 	}
 
-	for _, info := range c.info {
+	found := false
+	for path, info = range c.info {
 		// Match the pointer, type and name to avoid problems for struct and first field that have the
 		// same memory address
 		if info.field.Addr().Pointer() == fieldValue.Addr().Pointer() &&
 			info.field.Type().Name() == fieldValue.Type().Name() &&
 			info.field.Kind() == fieldValue.Kind() {
 
-			return info.version, nil
+			found = true
+			break
 		}
 	}
 
-	return 0, ErrFieldNotMapped
+	if !found {
+		err = ErrFieldNotMapped
+	}
+
+	return
 }
 
 // normalizeTag removes the slash from the beggining or end of the tag name and replace the other

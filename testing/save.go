@@ -61,5 +61,12 @@ func main() {
 		return
 	}
 
+	config.Key1.Subkey1 = "subkey1 changed"
+
+	if err := etc.SaveField(&config.Key1.Subkey1); err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	fmt.Println("Saved!")
 }

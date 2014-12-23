@@ -63,6 +63,39 @@ func ExampleSave() {
 	fmt.Printf("%+v\n", a)
 }
 
+func ExampleSaveField() {
+	type B struct {
+		SubField1 string `etcd:"subfield1"`
+	}
+
+	type A struct {
+		Field1 string            `etcd:"field1"`
+		Field2 int               `etcd:"field2"`
+		Field3 int64             `etcd:"field3"`
+		Field4 bool              `etcd:"field4"`
+		Field5 B                 `etcd:"field5"`
+		Field6 map[string]string `etcd:"field6"`
+		Field7 []string          `etcd:"field7"`
+	}
+
+	a := A{
+		Field1: "value1 changed",
+	}
+
+	client, err := NewClient([]string{"http://127.0.0.1:4001"}, "test", &a)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	if err := client.SaveField(&a.Field1); err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	fmt.Printf("%+v\n", a)
+}
+
 func ExampleLoad() {
 	type B struct {
 		SubField1 string `etcd:"subfield1"`
@@ -876,11 +909,6 @@ func TestSave(t *testing.T) {
 			},
 		},
 		{
-			description: "it should fail to save a non-structure",
-			config:      123,
-			expectedErr: true,
-		},
-		{
 			description: "it should fail when etcd rejects a set string",
 			init: func(c *clientMock) {
 				c.setErrors["/field"] = &etcd.EtcdError{ErrorCode: int(etcdErrorCodeRaftInternal)}
@@ -1303,6 +1331,230 @@ func BenchmarkSave(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		if err := c.Save(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestSaveField(t *testing.T) {
+	config := struct {
+		Field1 string `etcd:"field1"`
+		Field2 int    `etcd:"field2"`
+		Field3 int64  `etcd:"field3"`
+		Field4 bool   `etcd:"field4"`
+		Field5 struct {
+			Subfield1 string `etcd:"subfield1"`
+			Subfield2 int64  `etcd:"subfield2"`
+		} `etcd:"field5"`
+		Field6 []string          `etcd:"field6"`
+		Field7 map[string]string `etcd:"field7"`
+	}{
+		Field1: "value1",
+		Field2: 10,
+		Field3: 20,
+		Field4: true,
+		Field5: struct {
+			Subfield1 string `etcd:"subfield1"`
+			Subfield2 int64  `etcd:"subfield2"`
+		}{
+			Subfield1: "subvalue1",
+			Subfield2: 30,
+		},
+		Field6: []string{"value1", "value2", "value3"},
+		Field7: map[string]string{
+			"key1": "value1",
+			"key2": "value2",
+		},
+	}
+
+	data := []struct {
+		description string      // describe the test case
+		field       interface{} // field to save
+		expectedErr bool        // error expectation when saving the configuration
+		expected    etcd.Node   // etcd state after saving the configuration (only when there's no error)
+	}{
+		{
+			description: "it should save a string field",
+			field:       &config.Field1,
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field1",
+						Value: "value1",
+					},
+				},
+			},
+		},
+		{
+			description: "it should save an int field",
+			field:       &config.Field2,
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field2",
+						Value: "10",
+					},
+				},
+			},
+		},
+		{
+			description: "it should save an int64 field",
+			field:       &config.Field3,
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field3",
+						Value: "20",
+					},
+				},
+			},
+		},
+		{
+			description: "it should save a bool field",
+			field:       &config.Field4,
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key:   "/field4",
+						Value: "true",
+					},
+				},
+			},
+		},
+		{
+			description: "it should save a struct field",
+			field:       &config.Field5,
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field5",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field5/subfield1",
+								Value: "subvalue1",
+							},
+							{
+								Key:   "/field5/subfield2",
+								Value: "30",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "it should save a slice field",
+			field:       &config.Field6,
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field6",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field6/0",
+								Value: "value1",
+							},
+							{
+								Key:   "/field6/1",
+								Value: "value2",
+							},
+							{
+								Key:   "/field6/2",
+								Value: "value3",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "it should save a map field",
+			field:       &config.Field7,
+			expected: etcd.Node{
+				Dir: true,
+				Nodes: etcd.Nodes{
+					{
+						Key: "/field7",
+						Dir: true,
+						Nodes: etcd.Nodes{
+							{
+								Key:   "/field7/key1",
+								Value: "value1",
+							},
+							{
+								Key:   "/field7/key2",
+								Value: "value2",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "it should save a non-pointer field",
+			field:       config.Field1,
+			expectedErr: true,
+		},
+	}
+
+	for i, item := range data {
+		if DEBUG {
+			fmt.Printf(">>> Running TestSaveField for index %d\n", i)
+		}
+
+		mock := NewClientMock()
+		c := Client{
+			etcdClient: mock,
+			config:     reflect.ValueOf(&config),
+			info:       make(map[string]info),
+		}
+
+		c.preload(c.config, "")
+
+		err := c.SaveField(item.field)
+		if err == nil && item.expectedErr {
+			t.Errorf("Item %d, “%s”: error expected", i, item.description)
+			continue
+
+		} else if err != nil && !item.expectedErr {
+			t.Errorf("Item %d, “%s”: unexpected error. %s", i, item.description, err.Error())
+			continue
+		}
+
+		if !item.expectedErr && !equalNodes(mock.root, &item.expected) {
+			t.Errorf("Item %d, “%s”: nodes mismatch. Expecting “%s”; found “%s”",
+				i, item.description, printNode(&item.expected), printNode(mock.root))
+		}
+	}
+}
+
+func BenchmarkSaveField(b *testing.B) {
+	mock := NewClientMock()
+
+	config := struct {
+		Field string `etcd:"field"`
+	}{
+		Field: "value",
+	}
+
+	c := Client{
+		etcdClient: mock,
+		config:     reflect.ValueOf(&config),
+		info:       make(map[string]info),
+	}
+
+	c.preload(c.config, "")
+
+	for i := 0; i < b.N; i++ {
+		if err := c.SaveField(&config.Field); err != nil {
 			b.Fatal(err)
 		}
 	}
